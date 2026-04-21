@@ -1,0 +1,186 @@
+[
+  {
+    "id": 1,
+    "name": "Куриные ножки запечённые",
+    "meal_types": ["lunch", "dinner"],
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 45,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 260, "protein": 28, "fat": 14, "carbs": 2 },
+    "storage_instructions": "Холодильник до 4 суток, морозилка до 3 месяцев",
+    "heating_instructions": "Микроволновка 3 мин или сковорода 5 мин",
+    "tags": ["chicken", "oven", "batch"],
+    "ingredients": [
+      { "name": "Куриные ножки", "quantity": 200, "unit": "г" },
+      { "name": "Оливковое масло", "quantity": 10, "unit": "мл" },
+      { "name": "Паприка", "quantity": 3, "unit": "г" },
+      { "name": "Чеснок", "quantity": 5, "unit": "г" },
+      { "name": "Соль", "quantity": 2, "unit": "г" }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Котлеты куриные",
+    "meal_types": ["lunch", "dinner", "snack"],
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 25,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 190, "protein": 22, "fat": 9, "carbs": 4 },
+    "storage_instructions": "Холодильник до 3 суток, морозилка до 2 месяцев",
+    "heating_instructions": "Микроволновка 2 мин",
+    "tags": ["chicken", "pan", "batch"],
+    "ingredients": [
+      { "name": "Фарш куриный", "quantity": 150, "unit": "г" },
+      { "name": "Лук репчатый", "quantity": 30, "unit": "г" },
+      { "name": "Яйцо", "quantity": 0.5, "unit": "шт" },
+      { "name": "Соль, перец", "quantity": 2, "unit": "г" }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Гречка варёная",
+    "meal_types": ["breakfast", "lunch", "dinner"],
+    "prep_time_minutes": 2,
+    "cook_time_minutes": 18,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 155, "protein": 5, "fat": 1, "carbs": 31 },
+    "storage_instructions": "Холодильник до 3 суток",
+    "heating_instructions": "Микроволновка 1.5 мин с 2 ст.л. воды",
+    "tags": ["grain", "batch", "side"],
+    "ingredients": [
+      { "name": "Гречка", "quantity": 65, "unit": "г" }
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Рис варёный",
+    "meal_types": ["lunch", "dinner"],
+    "prep_time_minutes": 2,
+    "cook_time_minutes": 15,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 160, "protein": 3, "fat": 0, "carbs": 35 },
+    "storage_instructions": "Холодильник до 3 суток",
+    "heating_instructions": "Микроволновка 2 мин с водой",
+    "tags": ["grain", "batch", "side"],
+    "ingredients": [
+      { "name": "Рис", "quantity": 60, "unit": "г" }
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Творог с орехами",
+    "meal_types": ["breakfast", "snack"],
+    "prep_time_minutes": 3,
+    "cook_time_minutes": 0,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 220, "protein": 18, "fat": 12, "carbs": 8 },
+    "storage_instructions": "Холодильник до 2 суток",
+    "heating_instructions": null,
+    "tags": ["dairy", "no-cook", "breakfast"],
+    "ingredients": [
+      { "name": "Творог 5%", "quantity": 150, "unit": "г" },
+      { "name": "Грецкие орехи", "quantity": 20, "unit": "г" },
+      { "name": "Мёд (опц.)", "quantity": 5, "unit": "г" }
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Яичница/омлет",
+    "meal_types": ["breakfast"],
+    "prep_time_minutes": 3,
+    "cook_time_minutes": 7,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 210, "protein": 14, "fat": 16, "carbs": 2 },
+    "storage_instructions": "Употреблять сразу",
+    "heating_instructions": null,
+    "tags": ["eggs", "breakfast", "quick"],
+    "ingredients": [
+      { "name": "Яйца", "quantity": 3, "unit": "шт" },
+      { "name": "Молоко", "quantity": 30, "unit": "мл" },
+      { "name": "Масло", "quantity": 5, "unit": "г" }
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Овощной салат",
+    "meal_types": ["lunch", "dinner", "snack"],
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 0,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 80, "protein": 2, "fat": 5, "carbs": 8 },
+    "storage_instructions": "Без заправки — холодильник до 2 суток",
+    "heating_instructions": null,
+    "tags": ["vegetables", "no-cook", "side"],
+    "ingredients": [
+      { "name": "Огурец", "quantity": 100, "unit": "г" },
+      { "name": "Помидор", "quantity": 100, "unit": "г" },
+      { "name": "Зелень", "quantity": 20, "unit": "г" },
+      { "name": "Оливковое масло", "quantity": 10, "unit": "мл" }
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Говяжий стейк",
+    "meal_types": ["lunch", "dinner"],
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 15,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 280, "protein": 30, "fat": 17, "carbs": 0 },
+    "storage_instructions": "Холодильник до 3 суток",
+    "heating_instructions": "Сковорода 3 мин",
+    "tags": ["beef", "pan", "protein"],
+    "ingredients": [
+      { "name": "Говядина (вырезка)", "quantity": 180, "unit": "г" },
+      { "name": "Оливковое масло", "quantity": 8, "unit": "мл" },
+      { "name": "Соль, перец", "quantity": 2, "unit": "г" }
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Куриная грудка",
+    "meal_types": ["lunch", "dinner", "breakfast"],
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 20,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 165, "protein": 31, "fat": 4, "carbs": 0 },
+    "storage_instructions": "Холодильник до 4 суток, морозилка до 3 месяцев",
+    "heating_instructions": "Микроволновка 2 мин или сковорода 3 мин",
+    "tags": ["chicken", "oven", "batch", "protein"],
+    "ingredients": [
+      { "name": "Куриная грудка", "quantity": 160, "unit": "г" },
+      { "name": "Соль, перец", "quantity": 2, "unit": "г" }
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Треска запечённая",
+    "meal_types": ["lunch", "dinner"],
+    "prep_time_minutes": 5,
+    "cook_time_minutes": 20,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 105, "protein": 23, "fat": 1, "carbs": 0 },
+    "storage_instructions": "Холодильник до 3 суток",
+    "heating_instructions": "Микроволновка 2 мин",
+    "tags": ["fish", "oven", "batch", "protein"],
+    "ingredients": [
+      { "name": "Треска (филе)", "quantity": 150, "unit": "г" },
+      { "name": "Лимонный сок", "quantity": 5, "unit": "мл" },
+      { "name": "Соль, перец", "quantity": 2, "unit": "г" }
+    ]
+  },
+  {
+    "id": 11,
+    "name": "Овсянка на воде",
+    "meal_types": ["breakfast"],
+    "prep_time_minutes": 2,
+    "cook_time_minutes": 10,
+    "servings": 1,
+    "kbzhu_per_serving": { "kcal": 180, "protein": 6, "fat": 3, "carbs": 33 },
+    "storage_instructions": "Готовить свежую",
+    "heating_instructions": null,
+    "tags": ["grain", "batch", "side", "breakfast"],
+    "ingredients": [
+      { "name": "Овсяные хлопья", "quantity": 50, "unit": "г" }
+    ]
+  }
+]

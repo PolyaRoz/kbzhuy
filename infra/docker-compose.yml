@@ -1,0 +1,78 @@
+services:
+  api:
+    build: ../backend
+    ports:
+      - "8000:8000"
+    environment:
+      KBZHUY_DATABASE_URL: postgresql+asyncpg://kbzhuy:kbzhuy@db:5432/kbzhuy
+      KBZHUY_REDIS_URL: redis://redis:6379/0
+      KBZHUY_DEBUG: "true"
+      KBZHUY_ANTHROPIC_API_KEY: ${KBZHUY_ANTHROPIC_API_KEY:-}
+      KBZHUY_AI_MODEL: ${KBZHUY_AI_MODEL:-claude-sonnet-4-6}
+      KBZHUY_USE_LOCAL_LLM: ${KBZHUY_USE_LOCAL_LLM:-false}
+      KBZHUY_LOCAL_LLM_URL: ${KBZHUY_LOCAL_LLM_URL:-http://host.docker.internal:11434/v1}
+      KBZHUY_LOCAL_LLM_MODEL: ${KBZHUY_LOCAL_LLM_MODEL:-qwen2.5:14b}
+    volumes:
+      - ../backend:/app
+      - ../data:/app/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build: ../backend
+    command: celery -A app.worker worker --loglevel=info
+    environment:
+      KBZHUY_DATABASE_URL: postgresql+asyncpg://kbzhuy:kbzhuy@db:5432/kbzhuy
+      KBZHUY_REDIS_URL: redis://redis:6379/0
+      KBZHUY_ANTHROPIC_API_KEY: ${KBZHUY_ANTHROPIC_API_KEY:-}
+      KBZHUY_AI_MODEL: ${KBZHUY_AI_MODEL:-claude-sonnet-4-6}
+      KBZHUY_USE_LOCAL_LLM: ${KBZHUY_USE_LOCAL_LLM:-false}
+      KBZHUY_LOCAL_LLM_URL: ${KBZHUY_LOCAL_LLM_URL:-http://host.docker.internal:11434/v1}
+      KBZHUY_LOCAL_LLM_MODEL: ${KBZHUY_LOCAL_LLM_MODEL:-qwen2.5:14b}
+    volumes:
+      - ../backend:/app
+      - ../data:/app/data:ro
+    depends_on:
+      - api
+      - redis
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kbzhuy
+      POSTGRES_PASSWORD: kbzhuy
+      POSTGRES_DB: kbzhuy
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kbzhuy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+
+volumes:
+  pg_data:
+  redis_data:

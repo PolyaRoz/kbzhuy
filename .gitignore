@@ -1,0 +1,39 @@
+# Secrets
+.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node / Expo
+node_modules/
+mobile/dist/
+mobile/dist2/
+mobile/.expo/
+*.tsbuildinfo
+.expo-shared/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Alembic tmp
+*.pyc
+
+# Personal / Yandex.Disk junk
+Кулинария/
