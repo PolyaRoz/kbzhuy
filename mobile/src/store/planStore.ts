@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import { planApi, MealPlanResponse } from '@/api/plan';
 
-// Persistent key-value storage (same pattern as authStore)
 const planStorage = {
   async save(key: string, value: string) {
     if (Platform.OS === 'web') {
@@ -32,6 +31,7 @@ const planStorage = {
 interface PlanState {
   plan: MealPlanResponse | null;
   planId: number | null;
+  hasFetchedCurrent: boolean;
   loading: boolean;
   generating: boolean;
   replacingMealId: number | null;
@@ -49,6 +49,7 @@ interface PlanState {
 export const usePlanStore = create<PlanState>((set, get) => ({
   plan: null,
   planId: null,
+  hasFetchedCurrent: false,
   loading: false,
   generating: false,
   replacingMealId: null,
@@ -62,7 +63,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         set({ planId: parseInt(stored, 10) });
       }
     } catch {
-      // storage unavailable — planId stays null
+      // storage unavailable; keep defaults
     }
   },
 
@@ -71,14 +72,13 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     try {
       const data = await planApi.getCurrent();
       await planStorage.save('plan_id', String(data.id));
-      set({ plan: data, planId: data.id });
+      set({ plan: data, planId: data.id, hasFetchedCurrent: true });
     } catch (e: any) {
-      // 404 means no active plan — not an error, just empty state
       if (e?.response?.status === 404) {
-        set({ plan: null, planId: null });
+        set({ plan: null, planId: null, hasFetchedCurrent: true });
         await planStorage.remove('plan_id');
       } else {
-        set({ error: e?.message ?? 'Ошибка загрузки плана' });
+        set({ error: e?.message ?? 'Ошибка загрузки плана', hasFetchedCurrent: true });
       }
     } finally {
       set({ loading: false });
@@ -91,7 +91,6 @@ export const usePlanStore = create<PlanState>((set, get) => ({
       const { plan_id } = await planApi.generate({ use_ai: false, notes });
       await planStorage.save('plan_id', String(plan_id));
       set({ planId: plan_id });
-      // Load the full plan after generation
       await get().fetchPlan();
     } catch (e: any) {
       set({ error: e?.response?.data?.detail ?? e?.message ?? 'Ошибка генерации плана' });
@@ -106,7 +105,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
       await planApi.replaceMeal(mealId);
       const data = await planApi.getCurrent();
       await planStorage.save('plan_id', String(data.id));
-      set({ plan: data, planId: data.id });
+      set({ plan: data, planId: data.id, hasFetchedCurrent: true });
     } catch (e: any) {
       set({ error: e?.response?.data?.detail ?? e?.message ?? 'Не удалось заменить блюдо' });
     } finally {
@@ -120,7 +119,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
       await planApi.rebuildDay(dayId);
       const data = await planApi.getCurrent();
       await planStorage.save('plan_id', String(data.id));
-      set({ plan: data, planId: data.id });
+      set({ plan: data, planId: data.id, hasFetchedCurrent: true });
     } catch (e: any) {
       set({ error: e?.response?.data?.detail ?? e?.message ?? 'Не удалось пересобрать день' });
     } finally {
@@ -136,7 +135,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         ...plan,
         days: plan.days.map((d) => ({
           ...d,
-          meals: d.meals.map((m) => m.id === mealId ? { ...m, status: 'eaten' } : m),
+          meals: d.meals.map((m) => (m.id === mealId ? { ...m, status: 'eaten' } : m)),
         })),
       },
     });
@@ -144,6 +143,15 @@ export const usePlanStore = create<PlanState>((set, get) => ({
 
   clearPlan: async () => {
     await planStorage.remove('plan_id');
-    set({ plan: null, planId: null });
+    set({
+      plan: null,
+      planId: null,
+      hasFetchedCurrent: false,
+      loading: false,
+      generating: false,
+      replacingMealId: null,
+      rebuildingDayId: null,
+      error: null,
+    });
   },
 }));

@@ -16,6 +16,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { profileApi, ProfileCreateRequest, ProfileResponse } from '@/api/profile';
 import { useAuthStore } from '@/store/authStore';
 import { usePlanStore } from '@/store/planStore';
+import { shouldInvalidatePlan } from '@/utils/profilePlanInvalidation';
 
 const PRIMARY = '#1A7340';
 const BLUE = '#2563EB';
@@ -418,6 +419,10 @@ export default function ProfileScreen() {
     setError('');
     try {
       const updated = await profileApi.update(buildPayload(form));
+      const mustRebuildPlan = shouldInvalidatePlan(profile, updated);
+      if (mustRebuildPlan) {
+        await clearPlan();
+      }
       setProfile(updated);
       setForm(profileToForm(updated));
       setEditing(false);
@@ -432,7 +437,7 @@ export default function ProfileScreen() {
     showConfirm('Выйти из профиля?', 'Текущий вход будет сброшен на этом устройстве. После выхода можно войти заново или создать новый аккаунт.', async () => {
       await clearPlan();
       await logout();
-      router.replace('/onboarding/step1');
+      router.replace('/onboarding' as any);
     });
   };
 

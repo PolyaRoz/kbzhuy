@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { profileApi, ProfileCreateRequest, ProfileResponse } from '@/api/profile';
+import { usePlanStore } from '@/store/planStore';
+import { shouldInvalidatePlan } from '@/utils/profilePlanInvalidation';
 
 const PRIMARY = '#1A7340';
 const BG = '#F6FAF7';
@@ -345,6 +347,7 @@ function TextArea({ value, onChangeText, placeholder }: { value: string; onChang
 }
 
 export default function ProfileSettingsScreen() {
+  const clearPlan = usePlanStore((state) => state.clearPlan);
   const [form, setForm] = useState<ProfileForm>(defaultForm);
   const [loadedProfile, setLoadedProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -394,7 +397,11 @@ export default function ProfileSettingsScreen() {
     setSaving(true);
     setError('');
     try {
-      await profileApi.update(buildPayload(form));
+      const updated = await profileApi.update(buildPayload(form));
+      if (shouldInvalidatePlan(loadedProfile, updated)) {
+        await clearPlan();
+      }
+      setLoadedProfile(updated);
       goToProfile();
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? 'Не удалось сохранить профиль');

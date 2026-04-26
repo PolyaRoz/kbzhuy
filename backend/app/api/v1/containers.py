@@ -20,10 +20,12 @@ async def _get_today_meals_with_containers(user_id: int, session: AsyncSession):
     result = await session.execute(
         select(MealPlan)
         .where(MealPlan.user_id == user_id)
+        .where(MealPlan.status == "active")
         .where(MealPlan.period_start <= today)
         .where(MealPlan.period_end >= today)
+        .order_by(MealPlan.created_at.desc(), MealPlan.id.desc())
     )
-    plan = result.scalar_one_or_none()
+    plan = result.scalars().first()
     if not plan:
         return []
 
@@ -37,7 +39,7 @@ async def _get_today_meals_with_containers(user_id: int, session: AsyncSession):
             .selectinload(Container.location)
         )
     )
-    day = result.scalar_one_or_none()
+    day = result.scalars().first()
     if not day:
         return []
 

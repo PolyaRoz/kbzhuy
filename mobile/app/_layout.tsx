@@ -23,7 +23,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     if (!isAuthenticated) {
       // Not logged in — go to onboarding to create account
-      if (!inOnboarding) router.replace('/onboarding/step1');
+      if (!inOnboarding) router.replace('/onboarding' as any);
     } else {
       // Logged in — check if onboarding was completed
       if (!onboardingCompleted && !inOnboarding) {

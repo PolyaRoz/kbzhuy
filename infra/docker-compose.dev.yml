@@ -14,7 +14,7 @@ services:
       PYTHONPATH: /app
     volumes:
       - ../data:/app/data:ro
-      - ../../Кулинария:/app/culinary:ro
+      - ../data/culinary:/app/culinary:ro
     ports:
       - "8000:8000"
     depends_on:

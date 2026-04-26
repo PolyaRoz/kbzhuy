@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_session
 from app.core.security import get_current_user_id
 from app.models.shopping import ShoppingList, ShoppingItem
+from app.models.plan import MealPlan
 
 
 class ItemUpdate(BaseModel):
@@ -23,7 +24,9 @@ async def get_shopping_list(
 ):
     result = await session.execute(
         select(ShoppingList)
+        .join(MealPlan, ShoppingList.plan_id == MealPlan.id)
         .where(ShoppingList.user_id == user_id)
+        .where(MealPlan.status == "active")
         .order_by(ShoppingList.created_at.desc())
         .options(selectinload(ShoppingList.items))
     )

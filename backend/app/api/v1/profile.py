@@ -4,11 +4,35 @@ from sqlalchemy import select
 
 from app.core.database import get_session
 from app.core.security import get_current_user_id
+from app.models.plan import MealPlan
 from app.models.profile import Profile
 from app.schemas.profile import ProfileCreate, ProfileUpdate, ProfileResponse
 from app.services.nutri_service import calculate_targets, Goal, ActivityLevel
 
 router = APIRouter()
+
+PLAN_SENSITIVE_FIELDS = {
+    "sex",
+    "goal",
+    "weight_kg",
+    "height_cm",
+    "age",
+    "activity_level",
+    "measurements",
+    "training_days",
+    "sport_types",
+    "allergies",
+    "disliked_foods",
+    "budget_rub_week",
+    "diet_type",
+    "cooking_frequency",
+    "cooking_time_budget",
+    "family_size",
+    "kitchen_equipment",
+    "eating_schedule",
+    "planned_deviations",
+    "flexibility_pct",
+}
 
 
 @router.post("/onboarding", response_model=ProfileResponse, status_code=201)
@@ -89,6 +113,10 @@ async def update_profile(
 
     update_data = body.model_dump(exclude_unset=True)
     recalc_fields = {"sex", "weight_kg", "height_cm", "age", "activity_level", "goal"}
+    invalidate_active_plan = any(
+        field in PLAN_SENSITIVE_FIELDS and getattr(profile, field) != value
+        for field, value in update_data.items()
+    )
     if recalc_fields & set(update_data.keys()):
         targets = calculate_targets(
             weight_kg=update_data.get("weight_kg", profile.weight_kg) or 80.0,
@@ -107,6 +135,16 @@ async def update_profile(
 
     for field, value in update_data.items():
         setattr(profile, field, value)
+
+    if invalidate_active_plan:
+        active_plans_result = await session.execute(
+            select(MealPlan)
+            .where(MealPlan.user_id == user_id)
+            .where(MealPlan.status == "active")
+        )
+        for plan in active_plans_result.scalars().all():
+            plan.status = "cancelled"
+
     await session.commit()
     await session.refresh(profile)
     return profile

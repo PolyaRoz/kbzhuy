@@ -1,8 +1,6 @@
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -49,15 +47,16 @@ function optionalFloat(value: string | undefined) {
 
 export default function Step5() {
   const params = useLocalSearchParams<Record<string, string>>();
+  const setOnboardingCompleted = useAuthStore((state) => state.setOnboardingCompleted);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   const [items, setItems] = useState<string[]>([]);
   const [inputText, setInputText] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const showError = (title: string, msg: string) => {
-    if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') {
       setErrorMsg(msg);
     } else {
       Alert.alert(title, msg);
@@ -72,32 +71,16 @@ export default function Step5() {
   };
 
   const handleFinish = async () => {
-    const trimmedEmail = email.trim();
-    const trimmedPassword = password.trim();
     setErrorMsg('');
-    if (!trimmedEmail || !trimmedPassword) {
-      showError('Заполните данные', 'Введите email и пароль');
-      return;
-    }
-    if (trimmedPassword.length < 6) {
-      showError('Слабый пароль', 'Минимум 6 символов');
+
+    if (!isAuthenticated) {
+      showError('Сессия потеряна', 'Сначала войдите или зарегистрируйтесь заново.');
+      router.replace('/onboarding' as any);
       return;
     }
 
     setLoading(true);
     try {
-      const auth = useAuthStore.getState();
-      try {
-        await auth.register(trimmedEmail, trimmedPassword);
-      } catch (e: any) {
-        const detail = e?.response?.data?.detail;
-        if (detail === 'Email already registered') {
-          await auth.login(trimmedEmail, trimmedPassword);
-        } else {
-          throw e;
-        }
-      }
-
       const scheduleMeals = parseJson<Array<{ id: string; name: string; time: string }>>(params.schedule_meals, []);
       const schedule = {
         meals: scheduleMeals,
@@ -148,14 +131,11 @@ export default function Step5() {
         }
       }
 
-      await auth.setOnboardingCompleted(true);
+      await setOnboardingCompleted(true);
+      router.replace('/(tabs)');
     } catch (e: any) {
       const detail = e?.response?.data?.detail;
-      const message =
-        detail === 'Invalid credentials'
-          ? 'Аккаунт с таким email уже существует, но пароль не подходит.'
-          : detail || 'Не удалось создать профиль';
-      showError('Ошибка', message);
+      showError('Ошибка', detail || 'Не удалось сохранить профиль');
     } finally {
       setLoading(false);
     }
@@ -163,88 +143,73 @@ export default function Step5() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
-          <View style={s.progressBar}><View style={[s.progressFill, { width: '100%' }]} /></View>
-          <Text style={s.step}>Шаг 5 из 5</Text>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-            <Text style={s.backText}>← Назад</Text>
-          </TouchableOpacity>
-          <Text style={s.title}>Почти готово</Text>
-          <Text style={s.sub}>Добавьте плановые отклонения и создайте аккаунт</Text>
+      <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+        <View style={s.progressBar}><View style={[s.progressFill, { width: '100%' }]} /></View>
+        <Text style={s.step}>Шаг 5 из 5</Text>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Text style={s.backText}>← Назад</Text>
+        </TouchableOpacity>
+        <Text style={s.title}>Почти готово</Text>
+        <Text style={s.sub}>Добавьте плановые отклонения и сохраните анкету.</Text>
 
-          <Text style={s.sectionTitle}>Плановые отклонения</Text>
-          <Text style={s.sectionHint}>Например: ресторан по субботам, пицца по воскресеньям, сладкое после обеда.</Text>
-          <View style={s.inputRow}>
-            <TextInput
-              style={s.input}
-              placeholder="Например: пицца по воскресеньям"
-              placeholderTextColor="#9CA3AF"
-              value={inputText}
-              onChangeText={setInputText}
-              onSubmitEditing={addItem}
-              returnKeyType="done"
-              maxLength={100}
-            />
-            <TouchableOpacity style={[s.addBtn, !inputText.trim() && s.addBtnDisabled]} onPress={addItem} disabled={!inputText.trim()}>
-              <Text style={s.addBtnText}>+</Text>
+        <Text style={s.sectionTitle}>Плановые отклонения</Text>
+        <Text style={s.sectionHint}>
+          Например: ресторан по субботам, пицца по воскресеньям, сладкое после обеда.
+        </Text>
+
+        <View style={s.inputRow}>
+          <TextInput
+            style={s.input}
+            placeholder="Например: пицца по воскресеньям"
+            placeholderTextColor="#9CA3AF"
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={addItem}
+            returnKeyType="done"
+            maxLength={100}
+          />
+          <TouchableOpacity style={[s.addBtn, !inputText.trim() && s.addBtnDisabled]} onPress={addItem} disabled={!inputText.trim()}>
+            <Text style={s.addBtnText}>+</Text>
+          </TouchableOpacity>
+        </View>
+
+        {items.map((item, index) => (
+          <View key={`${item}-${index}`} style={s.chip}>
+            <Text style={s.chipText}>{item}</Text>
+            <TouchableOpacity onPress={() => setItems((prev) => prev.filter((_, i) => i !== index))}>
+              <Text style={s.chipRemove}>✕</Text>
             </TouchableOpacity>
           </View>
+        ))}
 
-          {items.map((item, index) => (
-            <View key={`${item}-${index}`} style={s.chip}>
-              <Text style={s.chipText}>{item}</Text>
-              <TouchableOpacity onPress={() => setItems((prev) => prev.filter((_, i) => i !== index))}>
-                <Text style={s.chipRemove}>✕</Text>
+        {items.length === 0 && (
+          <View style={s.examplesWrap}>
+            {EXAMPLES.map((example) => (
+              <TouchableOpacity
+                key={example}
+                style={s.exampleChip}
+                onPress={() => setItems((prev) => (prev.includes(example) ? prev : [...prev, example]))}
+              >
+                <Text style={s.exampleText}>{example}</Text>
               </TouchableOpacity>
-            </View>
-          ))}
-
-          {items.length === 0 && (
-            <View style={s.examplesWrap}>
-              {EXAMPLES.map((example) => (
-                <TouchableOpacity key={example} style={s.exampleChip} onPress={() => setItems((prev) => prev.includes(example) ? prev : [...prev, example])}>
-                  <Text style={s.exampleText}>{example}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          <Text style={[s.sectionTitle, { marginTop: 20 }]}>Аккаунт</Text>
-          <TextInput
-            style={s.fieldInput}
-            placeholder="Email"
-            placeholderTextColor={GRAY}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TextInput
-            style={[s.fieldInput, { marginTop: 10 }]}
-            placeholder="Пароль"
-            placeholderTextColor={GRAY}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <View style={s.summary}>
-            <Text style={s.summaryTitle}>Профиль:</Text>
-            <Text style={s.summaryRow}>Имя: <Text style={s.summaryVal}>{params.name || 'не указано'}</Text></Text>
-            <Text style={s.summaryRow}>Цель: <Text style={s.summaryVal}>{params.goal || 'maintain'}</Text></Text>
-            <Text style={s.summaryRow}>Вес: <Text style={s.summaryVal}>{params.weight || '—'} кг</Text></Text>
-            <Text style={s.summaryRow}>Приемов пищи: <Text style={s.summaryVal}>{parseJson<any[]>(params.schedule_meals, []).length || 0}</Text></Text>
+            ))}
           </View>
+        )}
 
-          {!!errorMsg && <Text style={s.errorText}>{errorMsg}</Text>}
+        <View style={s.summary}>
+          <Text style={s.summaryTitle}>Профиль:</Text>
+          <Text style={s.summaryRow}>Имя: <Text style={s.summaryVal}>{params.name || 'не указано'}</Text></Text>
+          <Text style={s.summaryRow}>Цель: <Text style={s.summaryVal}>{params.goal || 'maintain'}</Text></Text>
+          <Text style={s.summaryRow}>Вес: <Text style={s.summaryVal}>{params.weight || '—'} кг</Text></Text>
+          <Text style={s.summaryRow}>Приемов пищи: <Text style={s.summaryVal}>{parseJson<any[]>(params.schedule_meals, []).length || 0}</Text></Text>
+        </View>
 
-          <TouchableOpacity style={s.btn} onPress={handleFinish} activeOpacity={0.8} disabled={loading}>
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={s.btnText}>Начать использовать КБЖУЙ</Text>}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        {!!errorMsg && <Text style={s.errorText}>{errorMsg}</Text>}
+
+        <TouchableOpacity style={s.btn} onPress={handleFinish} activeOpacity={0.8} disabled={loading}>
+          {loading ? <ActivityIndicator color="#FFF" /> : <Text style={s.btnText}>Сохранить анкету</Text>}
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -272,7 +237,6 @@ const s = StyleSheet.create({
   examplesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   exampleChip: { backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#E5E7EB' },
   exampleText: { fontSize: 12, color: GRAY, fontWeight: '600' },
-  fieldInput: { backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 14, fontSize: 15, color: BLACK, borderWidth: 1, borderColor: '#E5E7EB' },
   summary: { backgroundColor: '#F0FDF4', borderRadius: 8, padding: 16, marginTop: 20, marginBottom: 20, borderWidth: 1, borderColor: '#BBF7D0' },
   summaryTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 10 },
   summaryRow: { fontSize: 14, color: GRAY, marginBottom: 4 },

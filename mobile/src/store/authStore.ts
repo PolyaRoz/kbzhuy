@@ -3,7 +3,6 @@ import { Platform } from 'react-native';
 import { apiClient } from '@/api/client';
 import { authApi } from '@/api/auth';
 
-// Token storage — SecureStore on native, localStorage on web
 const tokenStorage = {
   async save(key: string, value: string) {
     if (Platform.OS === 'web') {
@@ -44,8 +43,8 @@ interface AuthState {
   setOnboardingCompleted: (value: boolean) => Promise<void>;
 }
 
-function applyTokens(access: string, refresh: string) {
-  apiClient.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+function applyTokens(access: string) {
+  apiClient.defaults.headers.common.Authorization = `Bearer ${access}`;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -56,50 +55,81 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   onboardingCompleted: false,
 
   login: async (email, password) => {
+    const { usePlanStore } = require('@/store/planStore');
+    await usePlanStore.getState().clearPlan();
+
     const data = await authApi.login({ email, password });
-    applyTokens(data.access_token, data.refresh_token);
+    applyTokens(data.access_token);
     await tokenStorage.save('access_token', data.access_token);
     await tokenStorage.save('refresh_token', data.refresh_token);
-    // Check if profile exists to determine onboarding status
+
     let onboardingCompleted = false;
     try {
       await apiClient.get('/profile');
       onboardingCompleted = true;
       await tokenStorage.save('onboarding_completed', '1');
     } catch {
-      // No profile yet — onboarding required
+      await tokenStorage.remove('onboarding_completed');
     }
-    set({ accessToken: data.access_token, refreshToken: data.refresh_token, isAuthenticated: true, onboardingCompleted });
+
+    set({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      isAuthenticated: true,
+      onboardingCompleted,
+    });
   },
 
   register: async (email, password) => {
+    const { usePlanStore } = require('@/store/planStore');
+    await usePlanStore.getState().clearPlan();
+
     const data = await authApi.register({ email, password });
-    applyTokens(data.access_token, data.refresh_token);
+    applyTokens(data.access_token);
     await tokenStorage.save('access_token', data.access_token);
     await tokenStorage.save('refresh_token', data.refresh_token);
-    set({ accessToken: data.access_token, refreshToken: data.refresh_token, isAuthenticated: true, onboardingCompleted: false });
+    await tokenStorage.remove('onboarding_completed');
+
+    set({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      isAuthenticated: true,
+      onboardingCompleted: false,
+    });
   },
 
   logout: async () => {
-    delete apiClient.defaults.headers.common['Authorization'];
+    const { usePlanStore } = require('@/store/planStore');
+    await usePlanStore.getState().clearPlan();
+    delete apiClient.defaults.headers.common.Authorization;
     await tokenStorage.remove('access_token');
     await tokenStorage.remove('refresh_token');
     await tokenStorage.remove('onboarding_completed');
-    set({ accessToken: null, refreshToken: null, isAuthenticated: false, onboardingCompleted: false });
+
+    set({
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      onboardingCompleted: false,
+    });
   },
 
   refreshTokens: async () => {
     const { refreshToken } = get();
     if (!refreshToken) return false;
+
     try {
       const data = await authApi.refresh(refreshToken);
-      applyTokens(data.access_token, data.refresh_token);
+      applyTokens(data.access_token);
       await tokenStorage.save('access_token', data.access_token);
       await tokenStorage.save('refresh_token', data.refresh_token);
-      set({ accessToken: data.access_token, refreshToken: data.refresh_token, isAuthenticated: true });
+      set({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        isAuthenticated: true,
+      });
       return true;
     } catch {
-      // Refresh failed — force logout
       await get().logout();
       return false;
     }
@@ -109,15 +139,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const access = await tokenStorage.get('access_token');
       const refresh = await tokenStorage.get('refresh_token');
+
       if (access && refresh) {
-        applyTokens(access, refresh);
+        applyTokens(access);
         const flag = await tokenStorage.get('onboarding_completed');
-        set({ accessToken: access, refreshToken: refresh, isAuthenticated: true, isHydrated: true, onboardingCompleted: flag === '1' });
+        set({
+          accessToken: access,
+          refreshToken: refresh,
+          isAuthenticated: true,
+          isHydrated: true,
+          onboardingCompleted: flag === '1',
+        });
       } else {
         set({ isHydrated: true });
       }
     } catch {
-      // Storage unavailable — treat as unauthenticated
       set({ isHydrated: true });
     }
   },
