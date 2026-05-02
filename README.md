@@ -14,7 +14,6 @@
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docker.com)
 [![Claude](https://img.shields.io/badge/Claude-Sonnet_4.5-CC785C?logo=anthropic&logoColor=white)](https://anthropic.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
 
@@ -223,14 +222,13 @@ npx expo start --web              # откроется на http://localhost:190
 
 ---
 
-## 🤝 Авторство
+## 👤 Автор
 
 Полина Розанова  ·  [@PolyaRoz](https://github.com/PolyaRoz)
 
-Создано в рамках конкурса от Сбера. Если у вас вопросы или предложения — открывайте Issue или пишите в личку.
+Создано в рамках конкурса от Сбера.
 
 ---
 
-## 📄 Лицензия
-
-[MIT](LICENSE) — используйте, форкайте, дорабатывайте.
+> © 2026 Полина Розанова. Все права защищены.
+> Проект публикуется в демонстрационных целях. Использование, копирование или распространение кода без письменного разрешения автора запрещено.
