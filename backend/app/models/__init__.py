@@ -9,6 +9,7 @@ from app.models.cooking import CookingPlan, CookingStep
 from app.models.prep_task import PrepTask
 from app.models.deviation import Deviation
 from app.models.progress import ProgressLog
+from app.models.post import Post, PostComment, PostLike
 
 __all__ = [
     "User", "Profile",
@@ -18,4 +19,5 @@ __all__ = [
     "ShoppingList", "ShoppingItem",
     "CookingPlan", "CookingStep",
     "PrepTask", "Deviation", "ProgressLog",
+    "Post", "PostComment", "PostLike",
 ]

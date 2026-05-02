@@ -48,6 +48,8 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="onboarding" />
+          <Stack.Screen name="post/[id]" />
+          <Stack.Screen name="post/create" options={{ presentation: 'modal' }} />
         </Stack>
       </AuthGate>
     </QueryProvider>
