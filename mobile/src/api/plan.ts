@@ -54,6 +54,8 @@ export interface GeneratePlanRequest {
   notes?: string;
 }
 
+export type MealStatus = 'planned' | 'eaten' | 'skipped';
+
 // Returns Monday of the current week, so /plan/current can show the generated plan immediately.
 function currentMonday(): string {
   const d = new Date();
@@ -80,6 +82,9 @@ export const planApi = {
   getCurrent: (): Promise<MealPlanResponse> =>
     apiClient.get<MealPlanResponse>('/plan/current').then((r) => r.data),
 
+  getByPeriod: (periodStart: string): Promise<MealPlanResponse> =>
+    apiClient.get<MealPlanResponse>(`/plan/period/${periodStart}`).then((r) => r.data),
+
   patchDay: (dayId: number, data: object) =>
     apiClient.patch(`/plan/day/${dayId}`, data).then((r) => r.data),
 
@@ -88,6 +93,15 @@ export const planApi = {
 
   rebuildDay: (dayId: number) =>
     apiClient.post(`/plan/day/${dayId}/rebuild`).then((r) => r.data),
+
+  updateMealStatus: (mealId: number, status: MealStatus) =>
+    apiClient.patch(`/plan/meal/${mealId}/status`, { status }).then((r) => r.data),
+
+  swapPreparedMeal: (mealId: number, targetMealId: number) =>
+    apiClient.post(`/plan/meal/${mealId}/swap-prepared`, { target_meal_id: targetMealId }).then((r) => r.data),
+
+  manualReplacement: (mealId: number, description: string) =>
+    apiClient.post(`/plan/meal/${mealId}/manual-replacement`, { description }).then((r) => r.data),
 
   getDeviations: () =>
     apiClient.get('/plan/deviations').then((r) => r.data),

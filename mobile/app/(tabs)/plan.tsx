@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { planApi, MealPlanResponse } from '../../src/api/plan';
+import { cookingApi } from '../../src/api/cooking';
 import { useAuthStore } from '../../src/store/authStore';
 import { usePlanStore } from '../../src/store/planStore';
+import { useShoppingStore } from '../../src/store/shoppingStore';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const RED = '#DC2626';
+const GRAY = '#6E7E70';
+const RED = '#C8553D';
 
 type DayTotals = {
   kcal: number;
@@ -24,23 +27,45 @@ const DAY_FULL = ['Воскресенье', 'Понедельник', 'Втор�
 
 function formatShortDate(iso?: string | null) {
   if (!iso) return '—';
-  const d = new Date(iso);
+  const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return '—';
   return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]}`;
 }
 
 function formatDayShort(iso?: string | null) {
   if (!iso) return '—';
-  const d = new Date(iso);
+  const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return '—';
   return DAY_SHORT[d.getDay()];
 }
 
 function formatDayFull(iso?: string | null) {
   if (!iso) return '—';
-  const d = new Date(iso);
+  const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return '—';
   return DAY_FULL[d.getDay()];
+}
+
+function localIsoDate(value = new Date()) {
+  const y = value.getFullYear();
+  const m = String(value.getMonth() + 1).padStart(2, '0');
+  const d = String(value.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Must match planApi.generate() default and backend /plan/current filter (period_start <= today)
+function currentMondayIso() {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun, 1=Mon
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return localIsoDate(d);
+}
+
+function plusDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return localIsoDate(d);
 }
 
 function totalsFromMeals(meals: Array<any>): DayTotals {
@@ -76,55 +101,98 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 export default function PlanScreen() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const onboardingCompleted = useAuthStore((state) => state.onboardingCompleted);
 
-  const plan = usePlanStore((state) => state.plan);
-  const hasFetchedCurrent = usePlanStore((state) => state.hasFetchedCurrent);
-  const loading = usePlanStore((state) => state.loading);
-  const generating = usePlanStore((state) => state.generating);
-  const replacingMealId = usePlanStore((state) => state.replacingMealId);
-  const rebuildingDayId = usePlanStore((state) => state.rebuildingDayId);
-  const error = usePlanStore((state) => state.error);
+  const [plan, setPlan] = useState<MealPlanResponse | null>(null);
+  const [hasFetchedCurrent, setHasFetchedCurrent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [replacingMealId, setReplacingMealId] = useState<number | null>(null);
+  const [rebuildingDayId, setRebuildingDayId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [expandedMealId, setExpandedMealId] = useState<number | null>(null);
-  const autoGenerateAttempted = useRef(false);
+  const periodStart = currentMondayIso();
+  const periodEnd = plusDaysIso(periodStart, 6);
+
+  const fetchPlanningPlan = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await planApi.getByPeriod(periodStart);
+      setPlan(data);
+      setHasFetchedCurrent(true);
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        setPlan(null);
+        setHasFetchedCurrent(true);
+      } else {
+        setError(e?.response?.data?.detail ?? e?.message ?? 'Ошибка загрузки плана');
+        setHasFetchedCurrent(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generatePlanningPlan = async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      await planApi.generate({ period_start: periodStart, period_end: periodEnd, use_ai: false });
+      // Generate cooking plan immediately after meal plan
+      try { await cookingApi.generatePlan(); } catch (_) { /* ignore if already exists */ }
+      await fetchPlanningPlan();
+      // Sync all global stores so other tabs update immediately without navigation
+      await usePlanStore.getState().fetchPlan();
+      void useShoppingStore.getState().fetchList();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? e?.message ?? 'Ошибка генерации плана');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const replaceMeal = async (mealId: number) => {
+    setReplacingMealId(mealId);
+    setError(null);
+    try {
+      await planApi.replaceMeal(mealId);
+      await fetchPlanningPlan();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? e?.message ?? 'Не удалось заменить блюдо');
+    } finally {
+      setReplacingMealId(null);
+    }
+  };
+
+  const rebuildDay = async (dayId: number) => {
+    setRebuildingDayId(dayId);
+    setError(null);
+    try {
+      await planApi.rebuildDay(dayId);
+      await fetchPlanningPlan();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? e?.message ?? 'Не удалось пересобрать день');
+    } finally {
+      setRebuildingDayId(null);
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) {
-      autoGenerateAttempted.current = false;
       setSelectedIdx(0);
-      setExpandedMealId(null);
-      void usePlanStore.getState().clearPlan();
+      setPlan(null);
+      setHasFetchedCurrent(false);
       return;
     }
-
-    autoGenerateAttempted.current = false;
     setSelectedIdx(0);
-    setExpandedMealId(null);
   }, [accessToken, isAuthenticated]);
-
-  useEffect(() => {
-    if (!hasFetchedCurrent) {
-      autoGenerateAttempted.current = false;
-    }
-  }, [hasFetchedCurrent]);
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
     if (hasFetchedCurrent || loading) return;
-
-    void usePlanStore.getState().fetchPlan();
-  }, [accessToken, hasFetchedCurrent, isAuthenticated, loading]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !onboardingCompleted) return;
-    if (!hasFetchedCurrent || loading || generating || error || plan) return;
-    if (autoGenerateAttempted.current) return;
-
-    autoGenerateAttempted.current = true;
-    void usePlanStore.getState().generate();
-  }, [isAuthenticated, onboardingCompleted, hasFetchedCurrent, loading, generating, error, plan]);
+    void fetchPlanningPlan();
+  }, [accessToken, hasFetchedCurrent, isAuthenticated, loading, periodStart]);
 
   if (loading && !plan) {
     return (
@@ -146,7 +214,7 @@ export default function PlanScreen() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           <TouchableOpacity
             style={[styles.primaryButton, generating && styles.buttonDisabled]}
-            onPress={() => void usePlanStore.getState().generate()}
+            onPress={() => void generatePlanningPlan()}
             disabled={generating}
             activeOpacity={0.8}
           >
@@ -167,7 +235,10 @@ export default function PlanScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>План на неделю</Text>
+          <View>
+            <Text style={styles.title}>Следующая неделя</Text>
+            <Text style={styles.headerHint}>Меню для подготовки еды; замены обновляют покупки</Text>
+          </View>
           <Text style={styles.period}>
             {formatShortDate(plan.period_start)} — {formatShortDate(plan.period_end)}
           </Text>
@@ -184,7 +255,7 @@ export default function PlanScreen() {
               activeOpacity={0.75}
             >
               <Text style={[styles.dayChipShort, idx === safeSelectedIdx && styles.dayChipShortActive]}>{formatDayShort(day.date)}</Text>
-              <Text style={[styles.dayChipDate, idx === safeSelectedIdx && styles.dayChipDateActive]}>{new Date(day.date).getDate()}</Text>
+              <Text style={[styles.dayChipDate, idx === safeSelectedIdx && styles.dayChipDateActive]}>{new Date(`${day.date}T00:00:00`).getDate()}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -208,53 +279,15 @@ export default function PlanScreen() {
                   {meal.meal_time ?? '—'} · {meal.meal_name ?? meal.meal_type ?? 'Приём пищи'}
                 </Text>
                 <Text style={styles.mealTitle}>{meal.description ?? 'Блюдо без названия'}</Text>
-                <Text style={styles.mealKcal}>{Math.round(Number(meal?.kbzhu_actual?.kcal ?? 0))} ккал</Text>
-
-                {meal.recipe_details ? (
-                  <TouchableOpacity
-                    style={[styles.recipeToggle, expandedMealId === meal.id && styles.recipeToggleOpen]}
-                    onPress={() => setExpandedMealId(expandedMealId === meal.id ? null : meal.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.recipeToggleText}>Рецепт</Text>
-                    <Text style={styles.recipeToggleArrow}>{expandedMealId === meal.id ? '▲' : '▼'}</Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {expandedMealId === meal.id && meal.recipe_details ? (
-                  <View style={styles.recipeBox}>
-                    {meal.recipe_details.serving_grams ? (
-                      <Text style={styles.recipeMeta}>Порция: {meal.recipe_details.serving_grams} г</Text>
-                    ) : null}
-
-                    {Array.isArray(meal.recipe_details.ingredients) && meal.recipe_details.ingredients.length > 0 ? (
-                      <>
-                        <Text style={styles.recipeSectionTitle}>Ингредиенты</Text>
-                        {meal.recipe_details.ingredients.map((ingredient, index) => (
-                          <Text key={`${meal.id}-ingredient-${index}`} style={styles.recipeLine}>
-                            {ingredient.name} — {ingredient.quantity} {ingredient.unit}
-                          </Text>
-                        ))}
-                      </>
-                    ) : null}
-
-                    {Array.isArray(meal.recipe_details.steps) && meal.recipe_details.steps.length > 0 ? (
-                      <>
-                        <Text style={styles.recipeSectionTitle}>Рецепт</Text>
-                        {meal.recipe_details.steps.map((step, index) => (
-                          <Text key={`${meal.id}-step-${index}`} style={styles.recipeLine}>
-                            {step.order}. {step.text}
-                          </Text>
-                        ))}
-                      </>
-                    ) : null}
-                  </View>
-                ) : null}
+                <Text style={styles.mealKcal}>
+                  {meal.recipe_details?.serving_grams ? `${Math.round(Number(meal.recipe_details.serving_grams))} г · ` : ''}
+                  {Math.round(Number(meal?.kbzhu_actual?.kcal ?? 0))} ккал · Б {Math.round(Number(meal?.kbzhu_actual?.protein ?? 0))} г · Ж {Math.round(Number(meal?.kbzhu_actual?.fat ?? 0))} г · У {Math.round(Number(meal?.kbzhu_actual?.carbs ?? 0))} г
+                </Text>
               </View>
 
               <TouchableOpacity
                 style={[styles.smallButton, replacingMealId === meal.id && styles.buttonDisabled]}
-                onPress={() => void usePlanStore.getState().replaceMeal(meal.id)}
+                onPress={() => void replaceMeal(meal.id)}
                 disabled={Boolean(replacingMealId) || Boolean(rebuildingDayId) || generating}
                 activeOpacity={0.8}
               >
@@ -289,7 +322,7 @@ export default function PlanScreen() {
         {selectedDay ? (
           <TouchableOpacity
             style={[styles.secondaryButton, rebuildingDayId === selectedDay.id && styles.buttonDisabled]}
-            onPress={() => void usePlanStore.getState().rebuildDay(selectedDay.id)}
+            onPress={() => void rebuildDay(selectedDay.id)}
             disabled={Boolean(replacingMealId) || Boolean(rebuildingDayId) || generating}
             activeOpacity={0.8}
           >
@@ -299,7 +332,7 @@ export default function PlanScreen() {
 
         <TouchableOpacity
           style={[styles.primaryOutlineButton, generating && styles.buttonDisabled]}
-          onPress={() => void usePlanStore.getState().generate()}
+          onPress={() => void generatePlanningPlan()}
           disabled={generating}
           activeOpacity={0.8}
         >
@@ -315,13 +348,14 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  title: { fontSize: 22, fontWeight: '800', color: BLACK },
-  period: { fontSize: 12, color: GRAY },
-  loadingText: { marginTop: 12, color: GRAY, fontSize: 14 },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: BLACK, marginBottom: 8 },
-  emptyText: { fontSize: 14, color: GRAY, textAlign: 'center', marginBottom: 16 },
-  errorTitle: { fontSize: 22, fontWeight: '800', color: BLACK, marginBottom: 8 },
-  errorText: { fontSize: 13, color: RED, textAlign: 'center', marginBottom: 12 },
+  title: { fontSize: 22, fontWeight: '800', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.44},
+  headerHint: { marginTop: 3, fontSize: 12, color: GRAY, maxWidth: 230 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  period: { fontSize: 12, color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  loadingText: { marginTop: 12, color: GRAY, fontSize: 14 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  emptyTitle: { fontSize: 22, fontWeight: '800', color: BLACK, marginBottom: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.44},
+  emptyText: { fontSize: 14, color: GRAY, textAlign: 'center', marginBottom: 16 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  errorTitle: { fontSize: 22, fontWeight: '800', color: BLACK, marginBottom: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.44},
+  errorText: { fontSize: 13, color: RED, textAlign: 'center', marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   errorBanner: { backgroundColor: '#FEF2F2', color: RED, borderRadius: 12, padding: 12, marginBottom: 12, textAlign: 'center' },
   daysRow: { gap: 8, paddingBottom: 8 },
   dayChip: {
@@ -331,17 +365,17 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: CARD,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#D4DAD5',
     alignItems: 'center',
   },
   dayChipActive: { backgroundColor: PRIMARY, borderColor: PRIMARY },
-  dayChipShort: { fontSize: 11, fontWeight: '600', color: GRAY },
+  dayChipShort: { fontSize: 11, fontWeight: '600', color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   dayChipShortActive: { color: '#FFFFFF' },
-  dayChipDate: { fontSize: 17, fontWeight: '800', color: BLACK, marginTop: 2 },
+  dayChipDate: { fontSize: 17, fontWeight: '800', color: BLACK, marginTop: 2 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   dayChipDateActive: { color: '#FFFFFF' },
   dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12 },
-  dayTitle: { fontSize: 16, fontWeight: '700', color: BLACK },
-  dayMeta: { fontSize: 12, color: GRAY },
+  dayTitle: { fontSize: 16, fontWeight: '700', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.32},
+  dayMeta: { fontSize: 12, color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   mealCard: {
     backgroundColor: CARD,
     borderRadius: 14,
@@ -353,9 +387,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mealContent: { flex: 1 },
-  mealMeta: { fontSize: 12, color: GRAY, marginBottom: 4 },
-  mealTitle: { fontSize: 17, fontWeight: '700', color: BLACK, marginBottom: 6 },
-  mealKcal: { fontSize: 14, fontWeight: '700', color: PRIMARY },
+  mealMeta: { fontSize: 12, color: GRAY, marginBottom: 4 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  mealTitle: { fontSize: 17, fontWeight: '700', color: BLACK, marginBottom: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.34},
+  mealKcal: { fontSize: 14, fontWeight: '700', color: PRIMARY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   recipeToggle: {
     marginTop: 10,
     paddingHorizontal: 10,
@@ -367,18 +401,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   recipeToggleOpen: { backgroundColor: '#E1F3E8' },
-  recipeToggleText: { color: PRIMARY, fontSize: 13, fontWeight: '700' },
-  recipeToggleArrow: { color: PRIMARY, fontSize: 11, fontWeight: '700' },
+  recipeToggleText: { color: PRIMARY, fontSize: 13, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  recipeToggleArrow: { color: PRIMARY, fontSize: 11, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   recipeBox: {
     marginTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#D4DAD5',
     paddingTop: 10,
     gap: 4,
   },
-  recipeMeta: { color: PRIMARY, fontSize: 12, fontWeight: '700', marginBottom: 4 },
-  recipeSectionTitle: { color: BLACK, fontSize: 13, fontWeight: '700', marginTop: 6, marginBottom: 2 },
-  recipeLine: { color: GRAY, fontSize: 13, lineHeight: 18 },
+  recipeMeta: { color: PRIMARY, fontSize: 12, fontWeight: '700', marginBottom: 4 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  recipeSectionTitle: { color: BLACK, fontSize: 13, fontWeight: '700', marginTop: 6, marginBottom: 2 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.26},
+  recipeLine: { color: GRAY, fontSize: 13, lineHeight: 18 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   smallButton: {
     minWidth: 86,
     paddingHorizontal: 12,
@@ -389,13 +423,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  smallButtonText: { color: PRIMARY, fontSize: 13, fontWeight: '700' },
+  smallButtonText: { color: PRIMARY, fontSize: 13, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   summaryCard: { backgroundColor: CARD, borderRadius: 16, padding: 16, marginTop: 8 },
-  summaryTitle: { fontSize: 15, fontWeight: '700', color: BLACK, marginBottom: 12 },
+  summaryTitle: { fontSize: 15, fontWeight: '700', color: BLACK, marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryValue: { fontSize: 18, fontWeight: '800', color: PRIMARY },
-  summaryLabel: { fontSize: 11, color: GRAY, marginTop: 4 },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: PRIMARY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  summaryLabel: { fontSize: 11, color: GRAY, marginTop: 4 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   primaryButton: {
     minWidth: 220,
     backgroundColor: PRIMARY,
@@ -405,7 +439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   primaryOutlineButton: {
     marginTop: 14,
     borderRadius: 12,
@@ -415,7 +449,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryOutlineText: { color: PRIMARY, fontSize: 15, fontWeight: '700' },
+  primaryOutlineText: { color: PRIMARY, fontSize: 15, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   secondaryButton: {
     marginTop: 12,
     backgroundColor: '#EAF7EF',
@@ -425,8 +459,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryButtonText: { color: PRIMARY, fontSize: 15, fontWeight: '700' },
+  secondaryButtonText: { color: PRIMARY, fontSize: 15, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   buttonDisabled: { opacity: 0.6 },
   emptyMealsCard: { backgroundColor: CARD, borderRadius: 14, padding: 18, alignItems: 'center' },
-  emptyMealsText: { color: GRAY, fontSize: 14 },
+  emptyMealsText: { color: GRAY, fontSize: 14 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });

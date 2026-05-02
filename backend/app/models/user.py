@@ -19,4 +19,5 @@ class User(Base):
     profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)
     plans: Mapped[list["MealPlan"]] = relationship(back_populates="user")
     storage_locations: Mapped[list["StorageLocation"]] = relationship(back_populates="user")
+    inventory_items: Mapped[list["InventoryItem"]] = relationship(back_populates="user")
     progress_logs: Mapped[list["ProgressLog"]] = relationship(back_populates="user")

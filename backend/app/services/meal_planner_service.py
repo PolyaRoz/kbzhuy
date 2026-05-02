@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import random
 import re
+import copy
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -22,8 +23,10 @@ from sqlalchemy.orm import selectinload
 
 from app.models.plan import MealPlan, DayPlan, Meal
 from app.models.container import Container
+from app.models.cooking import CookingPlan
 from app.models.shopping import ShoppingList, ShoppingItem
 from app.models.profile import Profile
+from app.models.storage import InventoryItem
 from app.services.nutri_service import calculate_targets, Goal, ActivityLevel, NutriTarget
 
 # --- helpers -----------------------------------------------------------------
@@ -50,20 +53,76 @@ MARKDOWN_RECIPE_PATHS = [
 _RECIPES: list[dict] | None = None
 _RECIPES_BY_NAME: dict[str, dict] | None = None
 
+CYRILLIC = "а-яё"
+
+PREFERENCE_GROUPS: dict[str, tuple[str, ...]] = {
+    "alcohol": (
+        "алкогол", "вино", "вина", "вином", "вине",
+        "игрист", "шампан", "пиво", "пивн", "сидр", "водка", "ром", "коньяк", "бренди",
+        "виски", "ликер", "ликёр", "марсала", "саке", "текила", "джин",
+    ),
+    "pork": (
+        "свинина", "свинину", "свинин", "свиная", "свиной", "свиные", "свино",
+        "бекон", "ветчина", "хамон", "грудинка", "корейка", "окорок",
+    ),
+    "beef": ("говядина", "говяж", "телятина", "теляч"),
+    "fish": (
+        "рыба", "рыбу", "рыбн", "треска", "судак", "лосось", "семга", "сёмга", "форель",
+        "горбуша", "тунец", "скумбрия", "сайра", "хек", "минтай", "дорадо", "сибас",
+    ),
+    "seafood": (
+        "морепродукт", "кревет", "мидии", "мидия", "кальмар", "осьминог", "краб",
+        "гребеш", "устриц",
+    ),
+    "dairy": (
+        "лактоз", "молоко", "молоч", "сливки", "сливоч", "сметана", "йогурт", "кефир",
+        "творог", "сыр", "моцарелла", "пармезан", "рикотта", "брынза", "маскарпоне",
+    ),
+    "eggs": ("яйцо", "яйца", "яичный", "желток", "белок"),
+    "nuts": (
+        "орех", "орехи", "миндаль", "фундук", "кешью", "арахис", "грецк", "фисташ",
+        "пекан", "макадам",
+    ),
+    "gluten": (
+        "глютен", "пшениц", "пшенич", "мука", "манка", "булгур", "кус-кус", "кускус",
+        "хлеб", "лаваш", "паста", "лапша", "спагетти", "макарон",
+    ),
+    "mushrooms": ("гриб", "грибы", "шампиньон", "лисичк", "вешенк"),
+    "chicken": ("курица", "курин", "цыплен", "индейк", "птица"),
+    "apple": ("яблок", "яблоч"),
+    "pear": ("груш",),
+}
+
+PREFERENCE_GROUP_ALIASES: dict[str, tuple[str, ...]] = {
+    "alcohol": ("алкогол", "вино", "шампан", "пиво"),
+    "pork": ("свинин", "свинину", "свиная", "свиной", "бекон", "ветчина"),
+    "beef": ("говядин", "говяж", "телятина"),
+    "fish": ("рыба", "рыбу", "рыбн"),
+    "seafood": ("морепродукт", "кревет", "мидии", "кальмар"),
+    "dairy": ("лактоз", "молоч", "молоко", "сыр", "сливки", "творог"),
+    "eggs": ("яйц", "яичн", "желток", "белок"),
+    "nuts": ("орех", "миндаль", "арахис", "фундук", "кешью"),
+    "gluten": ("глютен", "пшениц", "мука", "хлеб", "паста", "лапша"),
+    "mushrooms": ("гриб", "шампиньон"),
+    "chicken": ("куриц", "курин", "птица", "индейк"),
+    "apple": ("яблок", "яблоч"),
+    "pear": ("груш",),
+}
+
 
 def _load_recipes() -> list[dict]:
     global _RECIPES
     if _RECIPES is None:
         markdown_path = next((path for path in MARKDOWN_RECIPE_PATHS if path.exists()), None)
         if markdown_path:
-            _RECIPES = _load_markdown_recipes(markdown_path)
+            _RECIPES = _with_safe_substitution_variants(_load_markdown_recipes(markdown_path))
             if _RECIPES:
                 return _RECIPES
 
         json_path = next((path for path in JSON_RECIPES_PATHS if path.exists()), None)
         if not json_path:
             raise FileNotFoundError("Recipe database not found")
-        _RECIPES = json.loads(json_path.read_text(encoding="utf-8"))
+        _RECIPES = _with_safe_substitution_variants(json.loads(json_path.read_text(encoding="utf-8")))
     return _RECIPES
 
 
@@ -239,6 +298,152 @@ def _extract_ingredients(body: str) -> list[dict]:
     return ingredients
 
 
+def _contains_any(text: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def _preference_group_ids(raw_terms: list[str]) -> set[str]:
+    group_ids: set[str] = set()
+    for raw in raw_terms:
+        term = str(raw or "").casefold()
+        if not term:
+            continue
+        for group_id, aliases in PREFERENCE_GROUP_ALIASES.items():
+            if any(alias in term for alias in aliases):
+                group_ids.add(group_id)
+    return group_ids
+
+
+def _compile_preference_patterns(raw_terms: list[str]) -> list[re.Pattern]:
+    terms: set[str] = set()
+    for raw in raw_terms:
+        term = re.sub(r"\s+", " ", str(raw or "").casefold()).strip()
+        if len(term) >= 3:
+            terms.add(term)
+
+    for group_id in _preference_group_ids(raw_terms):
+        terms.update(PREFERENCE_GROUPS.get(group_id, ()))
+
+    patterns = []
+    exact_terms = {
+        "вино", "вина", "вином", "вине", "пиво", "сидр", "водка", "ром", "коньяк",
+        "бренди", "виски", "ликер", "ликёр", "саке", "текила", "джин",
+    }
+    for term in sorted(terms, key=len, reverse=True):
+        escaped = re.escape(term)
+        if re.search(r"[а-яё]", term):
+            patterns.append(re.compile(rf"(?<![{CYRILLIC}]){escaped}(?![{CYRILLIC}])", re.I))
+            if term not in exact_terms:
+                patterns.append(re.compile(escaped, re.I))
+        else:
+            patterns.append(re.compile(escaped, re.I))
+    return patterns
+
+
+def _recipe_search_text(recipe: dict) -> str:
+    parts = [
+        str(recipe.get("name") or ""),
+        " ".join(str(tag) for tag in recipe.get("tags", [])),
+        " ".join(str(tag) for tag in recipe.get("meal_types", [])),
+    ]
+    for ingredient in recipe.get("ingredients", []):
+        parts.append(str(ingredient.get("name") or ""))
+    return " ".join(parts).casefold()
+
+
+def _recipe_matches_preference_patterns(recipe: dict, patterns: list[re.Pattern]) -> bool:
+    if not patterns:
+        return False
+    text = _recipe_search_text(recipe)
+    return any(pattern.search(text) for pattern in patterns)
+
+
+def _replace_text_preserving_case(text: str, replacements: tuple[tuple[str, str], ...]) -> str:
+    result = text
+    for source, target in replacements:
+        result = re.sub(source, target, result, flags=re.I)
+    return result
+
+
+APPLE_TO_PEAR_REPLACEMENTS = (
+    (r"Яблоки", "Груши"),
+    (r"яблоки", "груши"),
+    (r"Яблоко", "Груша"),
+    (r"яблоко", "груша"),
+    (r"яблочный", "грушевый"),
+    (r"яблочная", "грушевая"),
+    (r"яблочное", "грушевое"),
+    (r"яблочного", "грушевого"),
+    (r"яблока", "груши"),
+    (r"яблок", "груш"),
+)
+
+PEAR_TO_APPLE_REPLACEMENTS = (
+    (r"Груши", "Яблоки"),
+    (r"груши", "яблоки"),
+    (r"Груша", "Яблоко"),
+    (r"груша", "яблоко"),
+    (r"грушевый", "яблочный"),
+    (r"грушевая", "яблочная"),
+    (r"грушевое", "яблочное"),
+    (r"грушевого", "яблочного"),
+    (r"груш", "яблок"),
+)
+
+
+def _substituted_recipe(recipe: dict, replacements: tuple[tuple[str, str], ...], new_id: int) -> dict | None:
+    text = _recipe_search_text(recipe)
+    if not any(re.search(source, text, flags=re.I) for source, _target in replacements):
+        return None
+
+    variant = copy.deepcopy(recipe)
+    variant["id"] = new_id
+    changed = False
+
+    original_name = str(variant.get("name") or "")
+    variant["name"] = _replace_text_preserving_case(str(variant.get("name") or ""), replacements)
+    changed = changed or variant["name"] != original_name
+
+    variant["tags"] = [
+        _replace_text_preserving_case(str(tag), replacements)
+        for tag in variant.get("tags", [])
+    ]
+    for ingredient in variant.get("ingredients", []):
+        original_ingredient_name = str(ingredient.get("name") or "")
+        ingredient["name"] = _replace_text_preserving_case(str(ingredient.get("name") or ""), replacements)
+        changed = changed or ingredient["name"] != original_ingredient_name
+    for step in variant.get("steps", []):
+        if isinstance(step, dict) and step.get("text"):
+            original_step = str(step["text"])
+            step["text"] = _replace_text_preserving_case(str(step["text"]), replacements)
+            changed = changed or step["text"] != original_step
+    if not changed:
+        return None
+    if variant["name"] == recipe.get("name"):
+        marker = "грушей" if replacements is APPLE_TO_PEAR_REPLACEMENTS else "яблоком"
+        variant["name"] = f"{variant['name']} с {marker}"
+    return variant
+
+
+def _with_safe_substitution_variants(recipes: list[dict]) -> list[dict]:
+    result = list(recipes)
+    next_id = max((int(recipe.get("id") or 0) for recipe in result), default=0) + 1
+    existing_names = {str(recipe.get("name") or "").casefold() for recipe in result}
+
+    for recipe in recipes:
+        for replacements in (APPLE_TO_PEAR_REPLACEMENTS, PEAR_TO_APPLE_REPLACEMENTS):
+            variant = _substituted_recipe(recipe, replacements, next_id)
+            if not variant:
+                continue
+            key = variant["name"].casefold()
+            if key in existing_names:
+                continue
+            result.append(variant)
+            existing_names.add(key)
+            next_id += 1
+    return result
+
+
 def _recipes_for_meal(meal_type: str) -> list[dict]:
     return [r for r in _load_recipes() if meal_type in r["meal_types"]]
 
@@ -263,8 +468,15 @@ def _random_tiebreak() -> float:
     return random.random() * 0.05
 
 
-# Container label matrix: row = week-slot (1..3), col = А/Б/В/Г
-_LABELS = [f"{row}{col}" for row in range(1, 4) for col in "АБВГ"]
+CONTAINER_WEEKDAY_CODES = {
+    0: "ПН",
+    1: "ВТ",
+    2: "СР",
+    3: "ЧТ",
+    4: "ПТ",
+    5: "СБ",
+    6: "ВС",
+}
 
 
 MEAL_SCHEDULE = [
@@ -429,9 +641,7 @@ class MealPlannerService:
         self.session.add(plan)
         await self.session.flush()
 
-        containers_created: list[Container] = []
         shopping_agg: dict[str, dict] = {}  # name → {qty, unit, category}
-        label_idx = 0
         meal_schedule = self._profile_meal_schedule(profile)
         used_week_names: dict[str, int] = {}
 
@@ -446,13 +656,9 @@ class MealPlannerService:
 
             day_meals = self._compose_day_meals(meal_schedule, targets, profile, used_week_names)
             for scheduled_meal, recipe in day_meals:
-                # Container label (cycle through 1А..3Б)
-                label = _LABELS[label_idx % len(_LABELS)]
-                label_idx += 1
-
                 container = Container(
                     user_id=user_id,
-                    label=label,
+                    label=self._container_label(day_date, scheduled_meal, meal_schedule),
                     plan_id=plan.id,
                     status="filled",
                     contents_description=recipe["name"],
@@ -462,7 +668,6 @@ class MealPlannerService:
                 )
                 self.session.add(container)
                 await self.session.flush()
-                containers_created.append(container)
 
                 meal = Meal(
                     day_id=day_plan.id,
@@ -488,6 +693,15 @@ class MealPlannerService:
             .where(MealPlan.period_end >= week_start)
             .values(status="cancelled")
         )
+
+    async def _delete_cooking_plan(self, plan_id: int) -> None:
+        result = await self.session.execute(
+            select(CookingPlan).where(CookingPlan.plan_id == plan_id)
+        )
+        cooking_plan = result.scalar_one_or_none()
+        if cooking_plan is not None:
+            await self.session.delete(cooking_plan)
+            await self.session.flush()
 
     async def replace_meal(self, user_id: int, meal_id: int) -> Meal:
         result = await self.session.execute(
@@ -528,7 +742,7 @@ class MealPlannerService:
         excluded = {current_name.casefold()} if current_name else set()
         candidates = [recipe for recipe in candidates if recipe["name"].casefold() not in excluded]
         if not candidates:
-            candidates = [recipe for recipe in _load_recipes() if _valid_recipe(recipe) and recipe["name"].casefold() not in excluded]
+            candidates = self._safe_fallback_recipes(profile, excluded)
         recipe = self._pick_replacement_recipe(meal, candidates, targets)
         if recipe is None:
             raise ValueError("Recipe not found")
@@ -537,7 +751,7 @@ class MealPlannerService:
         if container is None:
             container = Container(
                 user_id=user_id,
-                label="R",
+                label=self._container_label(meal.day.date, schedule_meal, schedule),
                 plan_id=meal.day.plan_id,
                 status="filled",
                 expiry_date=meal.day.date + timedelta(days=3),
@@ -546,6 +760,7 @@ class MealPlannerService:
             await self.session.flush()
             meal.container_id = container.id
 
+        container.label = self._container_label(meal.day.date, schedule_meal, schedule)
         container.contents_description = recipe["name"]
         container.heating_instructions = recipe.get("heating_instructions")
         container.kbzhu = recipe["kbzhu_per_serving"]
@@ -554,6 +769,7 @@ class MealPlannerService:
 
         await self.session.flush()
         await self._sync_shopping_list(meal.day.plan_id, user_id, meal.day.plan.period_start)
+        await self._delete_cooking_plan(meal.day.plan_id)
         await self.session.commit()
         await self.session.refresh(meal)
         return meal
@@ -631,7 +847,7 @@ class MealPlannerService:
             if container is None:
                 container = Container(
                     user_id=user_id,
-                    label=f"D{index + 1}",
+                    label=self._container_label(day.date, scheduled_meal, meal_schedule),
                     plan_id=day.plan_id,
                     status="filled",
                     expiry_date=day.date + timedelta(days=3),
@@ -643,6 +859,7 @@ class MealPlannerService:
             meal.meal_type = scheduled_meal["id"]
             meal.status = "planned"
             meal.kbzhu_actual = recipe["kbzhu_per_serving"]
+            container.label = self._container_label(day.date, scheduled_meal, meal_schedule)
             container.contents_description = recipe["name"]
             container.heating_instructions = recipe.get("heating_instructions")
             container.kbzhu = recipe["kbzhu_per_serving"]
@@ -654,6 +871,7 @@ class MealPlannerService:
 
         await self.session.flush()
         await self._sync_shopping_list(day.plan_id, user_id, day.plan.period_start)
+        await self._delete_cooking_plan(day.plan_id)
         await self.session.commit()
         await self.session.refresh(day)
         return day
@@ -666,14 +884,25 @@ class MealPlannerService:
                     "id": str(meal.get("id") or f"meal_{index + 1}"),
                     "name": str(meal.get("name") or f"Прием {index + 1}"),
                     "time": str(meal.get("time") or "12:00"),
+                    "order": index,
                 }
                 for index, meal in enumerate(raw_meals)
                 if isinstance(meal, dict)
             ]
         return [
-            {"id": meal_type, "name": self._default_meal_name(meal_type), "time": time}
-            for meal_type, time in MEAL_SCHEDULE
+            {"id": meal_type, "name": self._default_meal_name(meal_type), "time": time, "order": index}
+            for index, (meal_type, time) in enumerate(MEAL_SCHEDULE)
         ]
+
+    @staticmethod
+    def _container_label(day_date: date, scheduled_meal: dict, meal_schedule: list[dict]) -> str:
+        fallback_order = next(
+            (index for index, item in enumerate(meal_schedule) if item["id"] == scheduled_meal.get("id")),
+            0,
+        )
+        meal_order = int(scheduled_meal.get("order", fallback_order)) + 1
+        weekday = CONTAINER_WEEKDAY_CODES.get(day_date.weekday(), "")
+        return f"{meal_order} {weekday}".strip()
 
     @staticmethod
     def _default_meal_name(meal_type: str) -> str:
@@ -702,12 +931,22 @@ class MealPlannerService:
 
     def _filtered_recipes(self, profile: Profile, meal_type: str) -> list[dict]:
         avoid = [*(profile.allergies or []), *(profile.disliked_foods or [])]
+        avoid_patterns = _compile_preference_patterns(avoid)
         equipment = {str(item).casefold() for item in (profile.kitchen_equipment or [])}
         max_minutes = None
         if isinstance(profile.cooking_time_budget, dict):
             raw_minutes = profile.cooking_time_budget.get("minutes")
             if isinstance(raw_minutes, (int, float)) and raw_minutes > 0:
-                max_minutes = raw_minutes
+                period = str(profile.cooking_time_budget.get("period") or "week").casefold()
+                frequency = str(profile.cooking_frequency or "twice_a_week").casefold()
+                if period == "day":
+                    max_minutes = raw_minutes
+                elif any(token in frequency for token in ("once", "1", "один")):
+                    max_minutes = max(25, min(75, raw_minutes / 2))
+                elif any(token in frequency for token in ("twice", "2", "два")):
+                    max_minutes = max(25, min(65, raw_minutes / 3))
+                else:
+                    max_minutes = max(20, min(60, raw_minutes / 5))
 
         recipes = []
         all_recipes = _load_recipes()
@@ -726,8 +965,7 @@ class MealPlannerService:
         for recipe in source_recipes:
             if not _valid_recipe(recipe):
                 continue
-            haystack = json.dumps(recipe, ensure_ascii=False).casefold()
-            if any(str(term).casefold() in haystack for term in avoid if term):
+            if _recipe_matches_preference_patterns(recipe, avoid_patterns):
                 continue
             tags = {str(tag).casefold() for tag in recipe.get("tags", [])}
             if "oven" in tags and equipment and "духовка" not in equipment:
@@ -739,6 +977,22 @@ class MealPlannerService:
                 continue
             recipes.append(recipe)
         return recipes
+
+    def _safe_fallback_recipes(
+        self,
+        profile: Profile,
+        excluded: set[str] | None = None,
+    ) -> list[dict]:
+        avoid = [*(profile.allergies or []), *(profile.disliked_foods or [])]
+        avoid_patterns = _compile_preference_patterns(avoid)
+        excluded = excluded or set()
+        return [
+            recipe
+            for recipe in _load_recipes()
+            if _valid_recipe(recipe)
+            and recipe["name"].casefold() not in excluded
+            and not _recipe_matches_preference_patterns(recipe, avoid_patterns)
+        ]
 
     @staticmethod
     def _is_light_snack(recipe: dict) -> bool:
@@ -811,7 +1065,7 @@ class MealPlannerService:
                 if filtered_candidates:
                     candidates = filtered_candidates
             if not candidates:
-                candidates = [recipe for recipe in _load_recipes() if _valid_recipe(recipe) and recipe["name"].casefold() not in excluded]
+                candidates = self._safe_fallback_recipes(profile, excluded)
             meal_target_kcal = targets.kcal / meal_count
             candidates = self._diversified_candidates(candidates, meal_target_kcal, diversity_boost=diversity_boost)
             slots.append((scheduled_meal, candidates))
@@ -830,8 +1084,12 @@ class MealPlannerService:
                     kbzhu = recipe["kbzhu_per_serving"]
                     next_totals = self._add_kbzhu(totals, kbzhu)
                     next_names = {*names, name}
-                    duplicate_penalty = 0.22 if name in names else 0
-                    week_penalty = min(0.12 * used_week_names.get(name, 0), 0.48)
+                    duplicate_penalty = 0.9 if name in names else 0
+                    week_penalty = self._weekly_repeat_penalty(
+                        profile,
+                        used_week_names.get(name, 0),
+                        diversity_boost=diversity_boost,
+                    )
                     score = self._score_totals(next_totals, partial_target) + duplicate_penalty + week_penalty + _random_tiebreak()
                     next_beams.append((
                         [*selected, (scheduled_meal, self._recipe_payload(recipe))],
@@ -894,6 +1152,34 @@ class MealPlannerService:
         )
         pool = ranked[: min(10, len(ranked))]
         return random.choice(pool)
+
+    @staticmethod
+    def _weekly_repeat_penalty(profile: Profile, previous_count: int, diversity_boost: bool = False) -> float:
+        if previous_count <= 0:
+            return 0.0
+        if diversity_boost:
+            return min(0.16 * previous_count, 0.56)
+
+        frequency = str(profile.cooking_frequency or "twice_a_week").casefold()
+        if any(token in frequency for token in ("once", "1", "один")):
+            if previous_count <= 2:
+                return -0.85
+            if previous_count == 3:
+                return -0.45
+            if previous_count == 4:
+                return 0.08
+            return min(0.30 * (previous_count - 4), 0.90)
+        if any(token in frequency for token in ("twice", "2", "два")):
+            if previous_count == 1:
+                return -0.42
+            if previous_count == 2:
+                return -0.16
+            return min(0.22 * (previous_count - 2), 0.70)
+        if any(token in frequency for token in ("every", "daily", "кажд")):
+            return min(0.08 * previous_count, 0.30)
+        if previous_count == 1:
+            return -0.10
+        return min(0.14 * (previous_count - 1), 0.45)
 
     @staticmethod
     def _diversified_candidates(candidates: list[dict], meal_target_kcal: float, diversity_boost: bool = False) -> list[dict]:
@@ -974,8 +1260,10 @@ class MealPlannerService:
             if filtered:
                 candidates = filtered
         if not candidates:
-            # Fallback: use any recipe from the database
-            candidates = _load_recipes()
+            candidates = self._safe_fallback_recipes(profile, excluded) if profile else [
+                recipe for recipe in _load_recipes()
+                if _valid_recipe(recipe) and recipe["name"].casefold() not in excluded
+            ]
         if not candidates:
             return None
 
@@ -1112,11 +1400,13 @@ class MealPlannerService:
             "стаканов": "мл",
             "ст. л.": "мл",
             "ст.л.": "мл",
+            "ст.л": "мл",
             "ст л": "мл",
             "столовая ложка": "мл",
             "столовые ложки": "мл",
             "ч. л.": "мл",
             "ч.л.": "мл",
+            "ч.л": "мл",
             "ч л": "мл",
             "чайная ложка": "мл",
             "чайные ложки": "мл",
@@ -1196,7 +1486,8 @@ class MealPlannerService:
             )
         ):
             return ""
-        if "вода" in clean:
+        clean_lower = clean.casefold()
+        if "вода" in clean_lower or "кипят" in clean_lower:
             return ""
         if clean in {
             "растительное",
@@ -1235,7 +1526,7 @@ class MealPlannerService:
             return "Чеснок"
         if "морков" in clean:
             return "Морковь"
-        if "огур" in clean:
+        if re.search(r"\bогур", clean):
             return "Огурцы"
         if "кабач" in clean:
             return "Кабачок"
@@ -1245,8 +1536,14 @@ class MealPlannerService:
             return "Картофель"
         if "шпинат" in clean:
             return "Шпинат"
+        if "айсберг" in clean:
+            return "Салат айсберг"
+        if "фенхел" in clean:
+            return "Фенхель"
         if "салатн" in clean and "лист" in clean:
             return "Салатные листья"
+        if "салат микс" in clean or "микс салат" in clean:
+            return "Салатный микс"
         if "петруш" in clean:
             return "Петрушка"
         if "базилик" in clean:
@@ -1263,6 +1560,20 @@ class MealPlannerService:
             return "Перец болгарский"
         if "перец чили" in clean:
             return ""
+        if "сельдер" in clean and "стеб" in clean:
+            return "Сельдерей стеблевой"
+        if "сельдер" in clean:
+            return "Сельдерей"
+        if "свекл" in clean:
+            return "Свекла"
+        if "тыкв" in clean:
+            return "Тыква"
+        if "цветн" in clean and "капуст" in clean:
+            return "Цветная капуста"
+        if "белокочан" in clean and "капуст" in clean:
+            return "Капуста белокочанная"
+        if "лисич" in clean:
+            return "Лисички"
 
         if "томатн паст" in clean:
             return "Томатная паста"
@@ -1270,6 +1581,8 @@ class MealPlannerService:
             return "Томаты протертые"
         if "вялен" in clean and "томат" in clean:
             return "Томаты вяленые"
+        if clean == "черри":
+            return "Томаты черри"
         if "черри" in clean and ("томат" in clean or "помидор" in clean):
             return "Томаты черри"
         if "томат" in clean or "помидор" in clean:
@@ -1289,6 +1602,18 @@ class MealPlannerService:
             return "Апельсин"
         if "банан" in clean:
             return "Банан"
+        if "яблок" in clean:
+            return "Яблоки"
+        if "груш" in clean:
+            return "Груши"
+        if "абрикос" in clean:
+            return "Абрикосы"
+        if "слив" in clean:
+            return "Сливы"
+        if "виноград" in clean:
+            return "Виноград"
+        if "инжир" in clean:
+            return "Инжир"
         if "клубник" in clean:
             return "Клубника"
         if "вишн" in clean:
@@ -1351,8 +1676,16 @@ class MealPlannerService:
             return "Орегано"
         if "смесь сушеных трав" in clean or "микс сушеных трав" in clean:
             return "Смесь сушеных трав"
+        if "кориц" in clean:
+            return "Корица"
+        if "кардамон" in clean:
+            return "Кардамон"
+        if "гвоздик" in clean:
+            return "Гвоздика"
+        if re.search(r"\bзира\b", clean):
+            return "Зира"
 
-        if "вино" in clean:
+        if re.search(r"\bвино\b", clean):
             if "игрист" in clean:
                 return "Вино игристое"
             if "сух" in clean and "бел" in clean:
@@ -1363,6 +1696,8 @@ class MealPlannerService:
 
         if "соус" in clean:
             return clean[:1].upper() + clean[1:]
+        if "рыбн" in clean and "набор" in clean:
+            return "Рыбный набор для бульона"
         if "бульон" in clean:
             if "курин" in clean:
                 return "Бульон куриный"
@@ -1393,6 +1728,8 @@ class MealPlannerService:
             return "Сметана"
         if "творог" in clean:
             return "Творог"
+        if "майонез" in clean:
+            return "Майонез"
         if "моцарелл" in clean:
             return "Моцарелла"
         if "пармезан" in clean:
@@ -1412,6 +1749,12 @@ class MealPlannerService:
 
         if "мука пшенич" in clean:
             return "Мука пшеничная"
+        if "мука рис" in clean:
+            return "Мука рисовая"
+        if "мука кукуруз" in clean:
+            return "Мука кукурузная"
+        if "мука миндал" in clean:
+            return "Мука миндальная"
         if clean == "мука":
             return "Мука"
         if "овсян" in clean and "хлоп" in clean:
@@ -1422,24 +1765,34 @@ class MealPlannerService:
             return "Лапша рисовая"
         if "манн" in clean:
             return "Манная крупа"
-        if clean == "жасмин":
+        if "чай" in clean and "жасмин" in clean:
+            return "Чай жасминовый"
+        if "жасмин" in clean and "рис" in clean:
             return "Рис жасмин"
+        if "жасмин" in clean:
+            return "Чай жасминовый"
         if "пшен" in clean:
             return "Пшено"
         if "греч" in clean:
             return "Гречка"
-        if "жасмин" in clean and "рис" in clean:
-            return "Рис жасмин"
         if "басмати" in clean and "рис" in clean:
             return "Рис басмати"
         if clean == "рис":
             return "Рис"
         if "кус-кус" in clean or "кускус" in clean:
             return "Кус-кус"
+        if "удон" in clean:
+            return "Лапша удон"
         if "паста" in clean or "каннеллони" in clean:
+            if "арахис" in clean:
+                return "Арахисовая паста"
+            if "томат" in clean:
+                return "Томатная паста"
             return "Паста"
         if "багет" in clean:
             return "Багет"
+        if "лаваш" in clean:
+            return "Лаваш"
         if "чечевиц" in clean:
             return "Чечевица"
         if "нут" in clean:
@@ -1450,6 +1803,10 @@ class MealPlannerService:
             return "Панировочные сухари"
         if "разрыхлит" in clean:
             return "Разрыхлитель"
+        if "тесто фило" in clean:
+            return "Тесто фило"
+        if "тесто" in clean:
+            return "Тесто"
         if "дрожж" in clean:
             return "Дрожжи"
         if "желатин" in clean:
@@ -1482,8 +1839,20 @@ class MealPlannerService:
             return "Фундук"
         if "кешью" in clean:
             return "Кешью"
+        if "арахис" in clean:
+            return "Арахис"
+        if "миндал" in clean and "лепест" in clean:
+            return "Лепестки миндаля"
+        if "миндал" in clean:
+            return "Миндаль"
+        if re.fullmatch(r"мак", clean):
+            return "Мак"
         if "грецк" in clean and "орех" in clean:
             return "Орех грецкий"
+        if "пектин" in clean:
+            return "Пектин"
+        if "крабов" in clean and "палоч" in clean:
+            return "Крабовые палочки"
         if "тун" in clean:
             return "Тунец"
         if "каперс" in clean:
@@ -1496,6 +1865,10 @@ class MealPlannerService:
             return "Семечки"
         if "какао" in clean:
             return "Какао"
+        if "прованск" in clean and "трав" in clean:
+            return "Прованские травы"
+        if "хмели-сунели" in clean or "хмели сунели" in clean:
+            return "Хмели-сунели"
         if "в собственном соку" in clean:
             return ""
         if re.fullmatch(r"\d+\s+колечк[а-я]*", clean):
@@ -1510,14 +1883,33 @@ class MealPlannerService:
             return "Сода"
         if "шоколад" in clean:
             return "Шоколад"
+        if clean == "белок":
+            return "Яичный белок"
+        if clean == "желток":
+            return "Яичный желток"
 
-        if any(word in clean for word in ("курин", "индейк", "говядин", "свинин", "печен", "фарш")):
+        if any(word in clean for word in ("курин", "индейк", "говядин", "говяж", "свинин", "свин", "печен", "фарш")):
+            if "фарш говяж" in clean:
+                return "Фарш говяжий"
+            if "фарш свино" in clean:
+                return "Фарш свино-говяжий"
             return clean[:1].upper() + clean[1:]
+        white_fish_terms = ("судак", "треск", "тиляп", "тилап", "хек", "минта", "пикш", "дорад", "сибас")
+        red_fish_terms = ("лосос", "семг", "форел", "горбуш", "кета")
+        if "филе" in clean:
+            if any(term in clean for term in white_fish_terms) or "белой рыбы" in clean or "белая рыба" in clean:
+                return "Филе белой рыбы"
+            if any(term in clean for term in red_fish_terms) or "красной рыбы" in clean or "красная рыба" in clean:
+                return "Филе красной рыбы"
+        if any(term in clean for term in white_fish_terms) or clean in {"рыбы", "рыба", "белой рыбы", "белая рыба"}:
+            return "Белая рыба"
+        if any(term in clean for term in red_fish_terms) or clean in {"красной рыбы", "красная рыба"}:
+            return "Красная рыба"
         if "сайр" in clean:
             return "Сайра"
         if "горбуш" in clean:
             return "Горбуша"
-        if any(word in clean for word in ("кревет", "рыб", "треск", "мид", "семг", "лосос")):
+        if any(word in clean for word in ("кревет", "рыб", "треск", "семг", "лосос")) or re.search(r"\bмид", clean):
             clean = re.sub(r"\s*\b(?:или|либо)\b.*$", "", clean).strip(" ,;:-")
             return clean[:1].upper() + clean[1:]
 
@@ -1530,16 +1922,19 @@ class MealPlannerService:
     def _normalize_quantity(name: str, quantity: float, unit: str | None) -> tuple[float, str]:
         normalized_unit = MealPlannerService._normalize_unit(unit)
         raw = (unit or "").strip().casefold()
+        is_teaspoon = raw in {"ч. л.", "ч.л.", "ч.л", "ч л", "чайная ложка", "чайные ложки"}
+        is_tablespoon = raw in {"ст. л.", "ст.л.", "ст.л", "ст л", "столовая ложка", "столовые ложки"}
+        is_glass = raw in {"стакан", "стакана", "стаканов"}
         factor = 1.0
         if raw in {"кг", "килограмм", "килограмма"}:
             factor = 1000.0
         elif raw in {"л", "литр", "литра"}:
             factor = 1000.0
-        elif raw in {"стакан", "стакана", "стаканов"}:
+        elif is_glass:
             factor = 250.0
-        elif raw in {"ст. л.", "ст.л.", "ст л", "столовая ложка", "столовые ложки"}:
+        elif is_tablespoon:
             factor = 15.0
-        elif raw in {"ч. л.", "ч.л.", "ч л", "чайная ложка", "чайные ложки"}:
+        elif is_teaspoon:
             factor = 5.0
         quantity *= factor
 
@@ -1552,26 +1947,131 @@ class MealPlannerService:
             "Томаты черри": 15.0,
             "Огурцы": 120.0,
             "Перец болгарский": 150.0,
+            "Имбирь": 30.0,
             "Картофель": 150.0,
             "Кабачок": 250.0,
             "Баклажан": 250.0,
             "Апельсин": 180.0,
             "Банан": 120.0,
+            "Груши": 160.0,
             "Лимон": 120.0,
+            "Лайм": 60.0,
+            "Сливы": 35.0,
+            "Вишня": 8.0,
+            "Гранат": 300.0,
             "Редис": 20.0,
+            "Ананас": 900.0,
+            "Шпинат": 50.0,
+            "Сельдерей стеблевой": 40.0,
             "Горбуша": 250.0,
+            "Тунец": 185.0,
+            "Куриное филе": 250.0,
+            "Куриные бедра": 250.0,
+            "Белая рыба": 300.0,
+            "Красная рыба": 300.0,
+            "Филе белой рыбы": 180.0,
+            "Филе красной рыбы": 180.0,
+            "Багет": 250.0,
+        }
+        bunch_to_grams = {
+            "Лук зеленый": 50.0,
+            "Петрушка": 30.0,
+            "Укроп": 30.0,
+            "Базилик": 30.0,
+            "Кинза": 30.0,
+            "Мята": 20.0,
+        }
+        teaspoon_to_grams = {
+            "Имбирь": 2.0,
+            "Кориандр": 2.0,
+            "Кориандр молотый": 2.0,
+            "Паприка": 2.0,
+            "Куркума": 2.0,
+            "Сода": 5.0,
+            "Корица": 3.0,
+            "Кардамон": 2.0,
+            "Гвоздика": 1.0,
+            "Зира": 2.0,
+            "Ваниль": 5.0,
+            "Специи для плова": 2.0,
+            "Хмели-сунели": 2.0,
+            "Прованские травы": 2.0,
+            "Орегано": 1.0,
+            "Перец черный": 2.0,
+        }
+        pantry_pack_to_grams = {
+            "Пшено": 80.0,
+            "Паста": 400.0,
+            "Панировочные сухари": 100.0,
+            "Молоко": 1000.0,
+            "Мука пшеничная": 1000.0,
+            "Пармезан": 100.0,
+            "Сыр": 200.0,
+            "Сыр твердый/полутвердый": 200.0,
+            "Сметана": 180.0,
+            "Дрожжи": 7.0,
+            "Ваниль": 5.0,
+            "Орегано": 10.0,
+            "Кунжут": 30.0,
+            "Мед": 250.0,
+        }
+        fruits_ml_to_g = {
+            "Сливы",
+            "Абрикосы",
+            "Ананас",
+            "Виноград",
+            "Яблоки",
+            "Груши",
+            "Апельсин",
+            "Банан",
+            "Арбуз",
+            "Клубника",
+            "Вишня",
+            "Малина",
+            "Голубика",
+            "Клюква",
+            "Смородина",
+            "Изюм",
+            "Гранат",
+            "Лайм",
+            "Лимон",
+        }
+        liquids_to_ml = {
+            "Молоко",
+            "Кефир",
+            "Сливки 10%",
+            "Сливки 20%",
+            "Сливки 30%",
+            "Сливки 33%",
+            "Бульон куриный",
+            "Бульон рыбный",
+            "Соевый соус",
+            "Уксус",
+            "Вино белое сухое",
         }
 
         if name == "Яйца куриные" and normalized_unit == "г":
             return quantity / 50.0, "шт"
         if name == "Яйца перепелиные" and normalized_unit == "г":
             return quantity / 12.0, "шт"
+        if is_teaspoon and name in teaspoon_to_grams:
+            return (quantity / 5.0) * teaspoon_to_grams[name], "г"
         if normalized_unit == "шт" and name in piece_to_grams:
             return quantity * piece_to_grams[name], "г"
-        if name in {"Молоко", "Кефир"} and normalized_unit == "г":
+        if normalized_unit == "пучок" and name in bunch_to_grams:
+            return quantity * bunch_to_grams[name], "г"
+        if normalized_unit == "шт" and name in pantry_pack_to_grams:
+            return quantity * pantry_pack_to_grams[name], "г" if name != "Молоко" else "мл"
+        if name in liquids_to_ml and normalized_unit == "г":
             return quantity, "мл"
+        if name == "Мед" and normalized_unit == "мл":
+            return quantity * 1.4, "г"
         if name == "Лимонный сок" and normalized_unit == "г":
             return quantity, "мл"
+        if name == "Томаты протертые" and normalized_unit == "мл":
+            return quantity, "г"
+        if name in fruits_ml_to_g and normalized_unit == "мл":
+            return quantity, "г"
         if name.startswith("Сливки ") and normalized_unit == "г":
             return quantity, "мл"
         if name.startswith("Масло ") and name != "Масло сливочное" and normalized_unit == "г":
@@ -1584,8 +2084,8 @@ class MealPlannerService:
             return quantity * 200.0, "г"
         if name.startswith("Бульон ") and normalized_unit == "шт":
             return 0.0, "шт"
-        if name in {"Лук зеленый", "Петрушка", "Базилик", "Кинза", "Мята"} and normalized_unit == "шт":
-            return quantity, "пучок"
+        if name in bunch_to_grams and normalized_unit == "шт":
+            return quantity * bunch_to_grams[name], "г"
         if name in {"Соль", "Перец черный", "Паприка", "Куркума"} and normalized_unit == "шт":
             return 0.0, "шт"
         return quantity, normalized_unit
@@ -1599,7 +2099,7 @@ class MealPlannerService:
                 value = int(value)
             return f"{value} {converted_unit}"
         if unit in {"г", "мл"}:
-            value = round(quantity)
+            value = round(quantity, 1) if 0 < quantity < 1 else round(quantity)
         else:
             value = round(quantity, 1)
         if isinstance(value, float) and value.is_integer():
@@ -1607,30 +2107,197 @@ class MealPlannerService:
         return f"{value} {unit}"
 
     @staticmethod
+    def _is_meaningful_shopping_quantity(quantity: float, unit: str) -> bool:
+        if quantity <= 0:
+            return False
+        if unit in {"г", "мл"}:
+            return quantity >= 1.0
+        if unit == "шт":
+            return quantity >= 0.1
+        return quantity > 0.01
+
+    @staticmethod
     def _ingredient_category(name: str) -> str:
         lower = name.casefold()
-        if "яйц" in lower:
+        if _contains_any(lower, (r"\bяйц", r"\bбелок\b", r"\bжелток\b")):
             return "Яйца"
-        if any(word in lower for word in ("соус", "томатная паста", "томаты протертые", "бульон", "вино", "пиво", "разрыхлитель", "сироп", "каперс", "горчиц", "желатин", "дрожж")):
+        if _contains_any(lower, (
+            r"\bсоус\b",
+            r"томатная паста",
+            r"томаты протертые",
+            r"\bбульон\b",
+            r"\bвино\b",
+            r"\bпиво\b",
+            r"разрыхлитель",
+            r"\bсироп",
+            r"каперс",
+            r"горчиц",
+            r"желатин",
+            r"дрожж",
+            r"майонез",
+            r"пектин",
+        )):
             return "Соусы и добавки"
-        if any(word in lower for word in ("масло", "соль", "сахар", "мед", "паприка", "куркума", "уксус", "перец черный", "розмарин", "кориандр", "кунжут", "орегано", "специи для плова", "сода", "ваниль", "смесь сушеных трав")):
+        if _contains_any(lower, (
+            r"масло",
+            r"\bсоль\b",
+            r"\bсахар\b",
+            r"\bмед\b",
+            r"\bпаприка\b",
+            r"\bкуркума\b",
+            r"уксус",
+            r"перец черный",
+            r"розмарин",
+            r"кориандр",
+            r"\bкунжут\b",
+            r"орегано",
+            r"специи для плова",
+            r"\bсода\b",
+            r"ванил",
+            r"смесь сушеных трав",
+            r"прованские травы",
+            r"хмели-сунели|хмели сунели",
+            r"\bкорица\b",
+            r"\bкардамон\b",
+            r"\bгвоздика\b",
+            r"\bзира\b",
+            r"\bмак\b",
+        )):
             return "Специи и масла"
-        if any(word in lower for word in ("курин", "индейк", "говядин", "свинин", "печен", "бекон")):
+        if _contains_any(lower, (
+            r"курин",
+            r"индейк",
+            r"говядин|говяж",
+            r"свинин|свин",
+            r"печен",
+            r"бекон",
+            r"\bфарш\b",
+            r"вырезк",
+        )):
             return "Мясо и птица"
-        if any(word in lower for word in ("рыб", "кревет", "мид", "лосос", "треск", "семг", "горбуш", "тун", "сайр")):
+        if _contains_any(lower, (
+            r"\bрыб",
+            r"кревет",
+            r"\bмид",
+            r"лосос",
+            r"треск",
+            r"семг",
+            r"горбуш",
+            r"тун",
+            r"сайр",
+            r"крабов",
+        )):
             return "Рыба и морепродукты"
-        if any(word in lower for word in ("кефир", "молоко", "йогурт", "сливки", "сметана", "творог", "моцарелла", "пармезан", "рикотта", "сыр", "брынз")):
+        if _contains_any(lower, (
+            r"кефир",
+            r"молоко",
+            r"йогурт",
+            r"сливки",
+            r"сметана",
+            r"творог",
+            r"моцарелл",
+            r"пармезан",
+            r"рикотт",
+            r"\bсыр\b",
+            r"брынз",
+        )):
             return "Молочные продукты"
-        if any(word in lower for word in ("греч", "рис", "лапша", "мука", "крупа", "пшено", "крахмал", "чечевица", "нут", "кус-кус", "сухари", "перловк", "овсян", "багет", "паста", "каннеллони")):
+        if _contains_any(lower, (
+            r"греч",
+            r"\bрис\b",
+            r"лапш",
+            r"\bмука\b",
+            r"\bкрупа\b",
+            r"\bпшено\b",
+            r"крахмал",
+            r"чечевиц",
+            r"\bнут\b",
+            r"кус-кус|кускус",
+            r"сухари",
+            r"перловк",
+            r"овсян",
+            r"багет",
+            r"\bпаста\b",
+            r"каннеллони",
+            r"\bтесто\b",
+            r"лаваш",
+        )):
             return "Крупы и хлеб"
-        if any(word in lower for word in ("гранатовый сок", "апельсин", "банан", "клубник", "лимон", "лайм", "арбуз", "вишн", "малин", "голубик", "клюкв", "ананас", "изюм", "смородин", "гранат")):
+        if _contains_any(lower, (
+            r"гранатовый сок",
+            r"апельсин",
+            r"банан",
+            r"клубник",
+            r"лимон",
+            r"лайм",
+            r"арбуз",
+            r"вишн",
+            r"малин",
+            r"голубик",
+            r"клюкв",
+            r"ананас",
+            r"изюм",
+            r"смородин",
+            r"гранат",
+            r"яблок",
+            r"груш",
+            r"абрикос",
+            r"слив",
+            r"виноград",
+            r"инжир",
+        )):
             return "Фрукты и ягоды"
-        if any(word in lower for word in ("лук", "чеснок", "морковь", "огур", "кабач", "баклаж", "картоф", "шпинат", "салатн", "петруш", "базилик", "кинза", "имбир", "шампин", "редис", "перец болгар", "томат", "помидор", "укроп", "щавел", "брокколи", "мята", "цук", "горошек", "капуста пекин")):
+        if _contains_any(lower, (
+            r"\bлук\b",
+            r"чеснок",
+            r"морков",
+            r"\bогур",
+            r"кабач",
+            r"баклаж",
+            r"картоф",
+            r"шпинат",
+            r"салат",
+            r"петруш",
+            r"базилик",
+            r"кинз",
+            r"имбир",
+            r"шампин",
+            r"редис",
+            r"перец болгар",
+            r"томат",
+            r"помидор",
+            r"укроп",
+            r"щавел",
+            r"брокколи",
+            r"мята",
+            r"цукини",
+            r"горошек",
+            r"капуста пекин",
+            r"капуста белокоч",
+            r"цветная капуста",
+            r"сельдер",
+            r"свекл",
+            r"тыкв",
+            r"айсберг",
+            r"фенхел",
+            r"лисич",
+        )):
             return "Овощи и зелень"
-        if any(word in lower for word in ("семечки", "орех", "фундук", "кешью", "кунжут")):
+        if _contains_any(lower, (
+            r"семеч",
+            r"орех",
+            r"фундук",
+            r"кешью",
+            r"миндал",
+            r"арахис",
+            r"кунжут",
+            r"лепестки миндаля",
+        )):
             return "Орехи и семечки"
-        if any(word in lower for word in ("сок", "кофе", "чай")):
+        if _contains_any(lower, (r"\bсок\b", r"\bкофе\b", r"\bчай\b", r"комбуч")):
             return "Напитки"
+        if _contains_any(lower, (r"какао", r"майонез")):
+            return "Соусы и добавки"
         return "Прочее"
 
     def _agg_shopping(self, agg: dict, recipe: dict, portions: float = 1.0) -> None:
@@ -1644,6 +2311,9 @@ class MealPlannerService:
             if quantity <= 0:
                 continue
             key = f"{normalized_name}|{unit}"
+            scaled_quantity = quantity * multiplier
+            if not self._is_meaningful_shopping_quantity(scaled_quantity, unit):
+                continue
             if key not in agg:
                 agg[key] = {
                     "name": normalized_name,
@@ -1651,7 +2321,7 @@ class MealPlannerService:
                     "unit": unit,
                     "category": self._ingredient_category(normalized_name),
                 }
-            agg[key]["quantity"] += quantity * multiplier
+            agg[key]["quantity"] += scaled_quantity
 
     async def _sync_shopping_list(self, plan_id: int, user_id: int, week_start: date) -> ShoppingList:
         result = await self.session.execute(
@@ -1668,7 +2338,13 @@ class MealPlannerService:
             .options(selectinload(ShoppingList.items))
         )
         existing = existing_result.scalar_one_or_none()
+
+        # Preserve checked/at_home state so re-syncing doesn't reset user's progress
+        checked_state: dict[str, tuple[bool, bool]] = {}
         if existing is not None:
+            for item in existing.items:
+                key = f"{item.name}|{item.unit}"
+                checked_state[key] = (bool(item.checked), bool(item.at_home))
             await self.session.delete(existing)
             await self.session.flush()
 
@@ -1681,7 +2357,7 @@ class MealPlannerService:
                     continue
                 self._agg_shopping(shopping_agg, recipe, meal.portions or 1.0)
 
-        return await self._create_shopping_list(user_id, plan_id, week_start, shopping_agg)
+        return await self._create_shopping_list(user_id, plan_id, week_start, shopping_agg, checked_state)
 
     async def _create_shopping_list(
         self,
@@ -1689,7 +2365,12 @@ class MealPlannerService:
         plan_id: int,
         week_start: date,
         agg: dict,
+        checked_state: dict | None = None,
     ) -> ShoppingList:
+        # Shopping list is built purely from the meal plan.
+        # Inventory levels do NOT affect what appears here — only the user's own
+        # checked/at_home choices (preserved via checked_state) determine visibility.
+        # This ensures clearing storage never brings items back to the shopping list.
         sl = ShoppingList(user_id=user_id, plan_id=plan_id, week_start=week_start)
         self.session.add(sl)
         await self.session.flush()
@@ -1709,6 +2390,10 @@ class MealPlannerService:
             "Прочее": 12,
         }
         for info in sorted(agg.values(), key=lambda item: (category_priority.get(item["category"], 99), item["name"])):
+            if not self._is_meaningful_shopping_quantity(float(info["quantity"]), info["unit"]):
+                continue
+            key = f"{info['name']}|{info['unit']}"
+            prev_checked, prev_at_home = (checked_state or {}).get(key, (False, False))
             self.session.add(
                 ShoppingItem(
                     shopping_list_id=sl.id,
@@ -1717,6 +2402,8 @@ class MealPlannerService:
                     unit=info["unit"],
                     category=info["category"],
                     priority=category_priority.get(info["category"], 10),
+                    checked=prev_checked,
+                    at_home=prev_at_home,
                 )
             )
 

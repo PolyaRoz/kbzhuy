@@ -14,10 +14,10 @@ import { useState } from 'react';
 import { useAuthStore } from '../../src/store/authStore';
 import { profileApi, ProfileCreateRequest } from '../../src/api/profile';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
+const GRAY = '#6E7E70';
 
 const EXAMPLES = [
   'Пиво с друзьями по пятницам',
@@ -219,29 +219,29 @@ const s = StyleSheet.create({
   container: { padding: 24, paddingBottom: 36 },
   progressBar: { height: 4, backgroundColor: PRIMARY, borderRadius: 2, marginBottom: 6 },
   progressFill: { height: 4, backgroundColor: PRIMARY, borderRadius: 2 },
-  step: { fontSize: 12, color: GRAY, marginBottom: 12 },
+  step: { fontSize: 12, color: GRAY, marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingRight: 12, marginBottom: 8 },
-  backText: { color: PRIMARY, fontSize: 15, fontWeight: '800' },
-  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 },
-  sub: { fontSize: 14, color: GRAY, marginBottom: 20 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 4 },
-  sectionHint: { fontSize: 12, color: GRAY, marginBottom: 10 },
+  backText: { color: PRIMARY, fontSize: 15, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.52},
+  sub: { fontSize: 14, color: GRAY, marginBottom: 20 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 4 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
+  sectionHint: { fontSize: 12, color: GRAY, marginBottom: 10 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   inputRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  input: { flex: 1, backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: BLACK, borderWidth: 1, borderColor: '#E5E7EB' },
+  input: { flex: 1, backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: BLACK, borderWidth: 1, borderColor: '#D4DAD5' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   addBtn: { width: 48, height: 48, borderRadius: 8, backgroundColor: PRIMARY, alignItems: 'center', justifyContent: 'center' },
   addBtnDisabled: { backgroundColor: '#D1D5DB' },
-  addBtnText: { color: '#FFF', fontSize: 24, fontWeight: '800', marginTop: -2 },
+  addBtnText: { color: '#FFF', fontSize: 24, fontWeight: '800', marginTop: -2 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8, borderWidth: 1, borderColor: '#BBF7D0', gap: 10 },
-  chipText: { flex: 1, fontSize: 14, color: BLACK },
-  chipRemove: { fontSize: 14, color: GRAY, fontWeight: '800' },
+  chipText: { flex: 1, fontSize: 14, color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  chipRemove: { fontSize: 14, color: GRAY, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   examplesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  exampleChip: { backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#E5E7EB' },
-  exampleText: { fontSize: 12, color: GRAY, fontWeight: '600' },
+  exampleChip: { backgroundColor: '#FFF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#D4DAD5' },
+  exampleText: { fontSize: 12, color: GRAY, fontWeight: '600' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   summary: { backgroundColor: '#F0FDF4', borderRadius: 8, padding: 16, marginTop: 20, marginBottom: 20, borderWidth: 1, borderColor: '#BBF7D0' },
-  summaryTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 10 },
-  summaryRow: { fontSize: 14, color: GRAY, marginBottom: 4 },
+  summaryTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 10 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
+  summaryRow: { fontSize: 14, color: GRAY, marginBottom: 4 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   summaryVal: { fontWeight: '800', color: BLACK },
-  errorText: { color: '#DC2626', fontSize: 13, textAlign: 'center', marginBottom: 12 },
+  errorText: { color: '#C8553D', fontSize: 13, textAlign: 'center', marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   btn: { backgroundColor: PRIMARY, borderRadius: 8, paddingVertical: 16, alignItems: 'center' },
-  btnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  btnText: { color: '#FFF', fontSize: 16, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });

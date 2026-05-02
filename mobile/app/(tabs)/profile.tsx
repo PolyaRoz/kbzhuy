@@ -18,14 +18,14 @@ import { useAuthStore } from '@/store/authStore';
 import { usePlanStore } from '@/store/planStore';
 import { shouldInvalidatePlan } from '@/utils/profilePlanInvalidation';
 
-const PRIMARY = '#1A7340';
-const BLUE = '#2563EB';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BLUE = '#4A5C4D';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const BORDER = '#E5E7EB';
-const DANGER = '#DC2626';
+const GRAY = '#6E7E70';
+const BORDER = '#D4DAD5';
+const DANGER = '#C8553D';
 
 const GOALS = [
   { id: 'loss', label: 'Похудение' },
@@ -499,9 +499,9 @@ export default function ProfileScreen() {
               <View style={s.kbzhuGrid}>
                 {[
                   { label: 'Калории', value: profile.target_kcal ?? 0, unit: 'ккал', color: PRIMARY },
-                  { label: 'Белки', value: profile.target_protein_g ?? 0, unit: 'г', color: '#3B82F6' },
-                  { label: 'Жиры', value: profile.target_fat_g ?? 0, unit: 'г', color: '#F59E0B' },
-                  { label: 'Углев.', value: profile.target_carbs_g ?? 0, unit: 'г', color: '#8B5CF6' },
+                  { label: 'Белки', value: profile.target_protein_g ?? 0, unit: 'г', color: '#4A5C4D' },
+                  { label: 'Жиры', value: profile.target_fat_g ?? 0, unit: 'г', color: '#C9A14B' },
+                  { label: 'Углев.', value: profile.target_carbs_g ?? 0, unit: 'г', color: '#C8553D' },
                 ].map((item) => (
                   <View key={item.label} style={s.kbzhuCard}>
                     <View style={[s.kbzhuStripe, { backgroundColor: item.color }]} />
@@ -648,72 +648,72 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   content: { padding: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  centerText: { fontSize: 14, color: GRAY },
+  centerText: { fontSize: 14, color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
   avatarSection: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: PRIMARY, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 26, fontWeight: '800', color: '#FFF' },
+  avatarText: { fontSize: 26, fontWeight: '800', color: '#FFF' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   headerText: { flex: 1 },
-  userName: { fontSize: 20, fontWeight: '800', color: BLACK },
-  goalBadge: { marginTop: 3, backgroundColor: '#D1FAE5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
-  goalBadgeText: { fontSize: 12, fontWeight: '600', color: PRIMARY },
+  userName: { fontSize: 20, fontWeight: '800', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  goalBadge: { marginTop: 3, backgroundColor: '#E8E4D9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
+  goalBadgeText: { fontSize: 12, fontWeight: '600', color: PRIMARY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   statCard: { flex: 1, minWidth: '45%', backgroundColor: CARD, borderRadius: 8, padding: 14, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' },
-  statValue: { fontSize: 18, fontWeight: '800', color: BLACK },
-  statLabel: { fontSize: 11, color: GRAY, marginTop: 2 },
+  statValue: { fontSize: 18, fontWeight: '800', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  statLabel: { fontSize: 11, color: GRAY, marginTop: 2 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: BLACK, marginBottom: 8, marginTop: 8 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: BLACK, marginBottom: 8, marginTop: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
 
   kbzhuGrid: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   kbzhuCard: { flex: 1, backgroundColor: CARD, borderRadius: 8, padding: 10, alignItems: 'center', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' },
   kbzhuStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
-  kbzhuValue: { fontSize: 18, fontWeight: '800', marginTop: 6 },
-  kbzhuUnit: { fontSize: 10, color: GRAY, marginTop: -2 },
-  kbzhuLabel: { fontSize: 10, color: GRAY, marginTop: 4, textAlign: 'center' },
+  kbzhuValue: { fontSize: 18, fontWeight: '800', marginTop: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  kbzhuUnit: { fontSize: 10, color: GRAY, marginTop: -2 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  kbzhuLabel: { fontSize: 10, color: GRAY, marginTop: 4, textAlign: 'center' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
   card: { backgroundColor: CARD, borderRadius: 8, padding: 4, marginBottom: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.04)' },
   scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12 },
-  scheduleRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  scheduleEmoji: { fontSize: 18 },
-  scheduleName: { flex: 1, fontSize: 14, fontWeight: '600', color: BLACK },
-  scheduleTimeBadge: { backgroundColor: '#D1FAE5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  scheduleTime: { fontSize: 14, fontWeight: '700', color: PRIMARY },
+  scheduleRowBorder: { borderBottomWidth: 1, borderBottomColor: '#F0EEE7' },
+  scheduleEmoji: { fontSize: 18 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  scheduleName: { flex: 1, fontSize: 14, fontWeight: '600', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  scheduleTimeBadge: { backgroundColor: '#E8E4D9', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  scheduleTime: { fontSize: 14, fontWeight: '700', color: PRIMARY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
   infoGrid: { backgroundColor: CARD, borderRadius: 8, padding: 4, marginBottom: 16 },
-  infoRow: { flexDirection: 'row', gap: 12, justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  infoLabel: { fontSize: 13, color: GRAY },
-  infoValue: { flex: 1, fontSize: 13, color: BLACK, fontWeight: '600', textAlign: 'right' },
+  infoRow: { flexDirection: 'row', gap: 12, justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F0EEE7' },
+  infoLabel: { fontSize: 13, color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  infoValue: { flex: 1, fontSize: 13, color: BLACK, fontWeight: '600', textAlign: 'right' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
-  deviationCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFFBEB', borderRadius: 8, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#FDE68A' },
-  deviationEmoji: { fontSize: 22 },
-  deviationName: { fontSize: 14, fontWeight: '700', color: '#92400E' },
-  deviationDay: { fontSize: 12, color: GRAY, marginTop: 1 },
+  deviationCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F9F6EE', borderRadius: 8, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#D4DAD5' },
+  deviationEmoji: { fontSize: 22 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  deviationName: { fontSize: 14, fontWeight: '700', color: '#C9A14B' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  deviationDay: { fontSize: 12, color: GRAY, marginTop: 1 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   emptyBand: { backgroundColor: CARD, borderRadius: 8, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
-  emptyBandText: { color: GRAY, fontSize: 13, textAlign: 'center' },
+  emptyBandText: { color: GRAY, fontSize: 13, textAlign: 'center' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER },
-  chipActive: { backgroundColor: '#F0FDF4', borderColor: PRIMARY },
-  chipText: { fontSize: 13, fontWeight: '600', color: GRAY },
+  chipActive: { backgroundColor: '#E8E4D9', borderColor: PRIMARY },
+  chipText: { fontSize: 13, fontWeight: '600', color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   chipTextActive: { color: PRIMARY },
 
-  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#F0EEE7' },
   fieldBlock: { backgroundColor: CARD, borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: BORDER },
-  fieldLabel: { fontSize: 14, color: BLACK, flex: 1 },
+  fieldLabel: { fontSize: 14, color: BLACK, flex: 1 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   inputWrapMultiline: { alignItems: 'stretch', marginTop: 10 },
-  input: { fontSize: 16, fontWeight: '700', color: PRIMARY, textAlign: 'right', minWidth: 70 },
-  inputMultiline: { minHeight: 96, textAlignVertical: 'top', textAlign: 'left', color: BLACK, fontWeight: '500', backgroundColor: '#F9FAFB', borderRadius: 8, padding: 10 },
-  unit: { fontSize: 13, color: GRAY },
+  input: { fontSize: 16, fontWeight: '700', color: PRIMARY, textAlign: 'right', minWidth: 70 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  inputMultiline: { minHeight: 96, textAlignVertical: 'top', textAlign: 'left', color: BLACK, fontWeight: '500', backgroundColor: '#FAFAF7', borderRadius: 8, padding: 10 },
+  unit: { fontSize: 13, color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 
   settingsBtn: { backgroundColor: CARD, borderRadius: 8, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: BORDER, marginTop: 8 },
-  settingsBtnText: { fontSize: 14, fontWeight: '700', color: GRAY },
+  settingsBtnText: { fontSize: 14, fontWeight: '700', color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   primaryBtn: { backgroundColor: PRIMARY, borderRadius: 8, paddingVertical: 15, alignItems: 'center', marginTop: 8 },
-  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   secondaryBtn: { backgroundColor: CARD, borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: BORDER },
-  secondaryBtnText: { color: GRAY, fontSize: 14, fontWeight: '700' },
-  logoutBtn: { backgroundColor: '#FEF2F2', borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#FECACA' },
-  logoutBtnText: { color: DANGER, fontSize: 14, fontWeight: '800' },
-  errorText: { color: DANGER, fontSize: 13, textAlign: 'center', marginVertical: 10 },
+  secondaryBtnText: { color: GRAY, fontSize: 14, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  logoutBtn: { backgroundColor: '#FCEAE6', borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#EDBBAB' },
+  logoutBtnText: { color: DANGER, fontSize: 14, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  errorText: { color: DANGER, fontSize: 13, textAlign: 'center', marginVertical: 10 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });

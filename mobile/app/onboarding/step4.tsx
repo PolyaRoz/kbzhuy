@@ -3,12 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const BORDER = '#E5E7EB';
+const GRAY = '#6E7E70';
+const BORDER = '#D4DAD5';
 
 const ALLERGY_OPTIONS = ['Лактоза', 'Глютен', 'Орехи', 'Яйца', 'Морепродукты', 'Соя'];
 const EQUIPMENT_OPTIONS = ['Плита', 'Духовка', 'Микроволновка', 'Мультиварка', 'Блендер', 'Гриль'];
@@ -148,29 +148,29 @@ export default function Step4() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { padding: 24, paddingBottom: 36 },
-  progressBar: { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, marginBottom: 6 },
+  progressBar: { height: 4, backgroundColor: '#D4DAD5', borderRadius: 2, marginBottom: 6 },
   progressFill: { height: 4, backgroundColor: PRIMARY, borderRadius: 2 },
-  step: { fontSize: 12, color: GRAY, marginBottom: 12 },
+  step: { fontSize: 12, color: GRAY, marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingRight: 12, marginBottom: 8 },
-  backText: { color: PRIMARY, fontSize: 15, fontWeight: '800' },
-  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 },
-  sub: { fontSize: 14, color: GRAY, marginBottom: 20, lineHeight: 20 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 8, marginTop: 8 },
+  backText: { color: PRIMARY, fontSize: 15, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.52},
+  sub: { fontSize: 14, color: GRAY, marginBottom: 20, lineHeight: 20 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 8, marginTop: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   chip: { borderRadius: 8, borderWidth: 1.5, borderColor: BORDER, backgroundColor: CARD, paddingHorizontal: 12, paddingVertical: 8 },
   chipActive: { borderColor: PRIMARY, backgroundColor: '#F0FDF4' },
-  chipText: { color: GRAY, fontSize: 13, fontWeight: '700' },
+  chipText: { color: GRAY, fontSize: 13, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   chipTextActive: { color: PRIMARY },
-  textInput: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 13, color: BLACK, fontSize: 15, marginBottom: 12 },
+  textInput: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 13, color: BLACK, fontSize: 15, marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   card: { backgroundColor: CARD, borderRadius: 8, paddingHorizontal: 14, marginBottom: 10, borderWidth: 1, borderColor: BORDER },
   fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
-  fieldLabel: { color: BLACK, fontSize: 15 },
+  fieldLabel: { color: BLACK, fontSize: 15 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  input: { minWidth: 92, textAlign: 'right', fontSize: 17, color: PRIMARY, fontWeight: '800' },
-  unit: { color: GRAY, fontSize: 13 },
+  input: { minWidth: 92, textAlign: 'right', fontSize: 17, color: PRIMARY, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  unit: { color: GRAY, fontSize: 13 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   twoCol: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   choice: { flex: 1, backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   choiceText: { color: GRAY, fontWeight: '800' },
   btn: { backgroundColor: PRIMARY, borderRadius: 8, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
-  btnText: { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  btnText: { color: '#FFF', fontSize: 17, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });

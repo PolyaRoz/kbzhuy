@@ -1,10 +1,10 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, View, Text, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AgentWidget } from '@/components/AgentWidget';
 
-const PRIMARY = '#1A7340';
-const GRAY = '#6B7280';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const GRAY = '#6E7E70';
 
 type TabIconProps = {
   name: keyof typeof Ionicons.glyphMap;
@@ -25,78 +25,89 @@ function TabIcon({ name, focused, label }: TabIconProps) {
 
 export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: styles.tabBar,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} label="Дом" />
-          ),
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: styles.tabBar,
         }}
-      />
-      <Tabs.Screen
-        name="plan"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} label="План" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="cooking"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'flame' : 'flame-outline'} focused={focused} label="Готовка" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="storage"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'cube' : 'cube-outline'} focused={focused} label="Хранение" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="shopping"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'cart' : 'cart-outline'} focused={focused} label="Покупки" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="agent"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} focused={focused} label="Агент" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} label="Профиль" />
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} label="Дом" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="plan"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} label="План" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="cooking"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'flame' : 'flame-outline'} focused={focused} label="Готовка" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="storage"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'cube' : 'cube-outline'} focused={focused} label="Хранение" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="shopping"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'cart' : 'cart-outline'} focused={focused} label="Покупки" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="tray"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'newspaper' : 'newspaper-outline'} focused={focused} label="Поднос" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="agent"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} label="Профиль" />
+            ),
+          }}
+        />
+      </Tabs>
+
+      {/* Floating agent widget — visible on all screens */}
+      <AgentWidget />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAF7',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#D4DAD5',
     height: Platform.OS === 'ios' ? 84 : 64,
     paddingBottom: Platform.OS === 'ios' ? 24 : 8,
     paddingTop: 8,
@@ -109,5 +120,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '500',
     letterSpacing: 0.3,
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
   },
 });

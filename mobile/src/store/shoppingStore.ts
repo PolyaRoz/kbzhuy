@@ -17,7 +17,8 @@ interface ShoppingState {
   loading: boolean;
   error: string | null;
   fetchList: () => Promise<void>;
-  toggleItem: (itemId: number) => Promise<void>;
+  confirmItems: (itemIds: number[]) => Promise<void>;
+  markAllBought: () => Promise<void>;
 }
 
 export const useShoppingStore = create<ShoppingState>((set, get) => ({
@@ -37,17 +38,28 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
     }
   },
 
-  toggleItem: async (itemId) => {
-    const item = get().items.find((i) => i.id === itemId);
-    if (!item) return;
-    const checked = !item.checked;
-    // Optimistic update
-    set({ items: get().items.map((i) => i.id === itemId ? { ...i, checked } : i) });
+  confirmItems: async (itemIds) => {
+    if (!itemIds.length) return;
+    set({ loading: true, error: null });
     try {
-      await shoppingApi.checkItem(itemId, checked);
-    } catch {
-      // Rollback on failure
-      set({ items: get().items.map((i) => i.id === itemId ? { ...i, checked: !checked } : i) });
+      await shoppingApi.confirmItems(itemIds);
+      await get().fetchList();
+    } catch (e: any) {
+      set({ error: e?.message ?? 'Не удалось подтвердить покупку' });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  markAllBought: async () => {
+    set({ loading: true, error: null });
+    try {
+      await shoppingApi.markAll();
+      await get().fetchList();
+    } catch (e: any) {
+      set({ error: e?.message ?? 'Ошибка обновления списка покупок' });
+    } finally {
+      set({ loading: false });
     }
   },
 }));

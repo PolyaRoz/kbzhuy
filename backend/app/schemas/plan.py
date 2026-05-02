@@ -54,3 +54,7 @@ class PlanResponse(BaseModel):
 class DayPatchRequest(BaseModel):
     meal_type: str
     new_recipe_id: int
+
+
+class MealStatusPatch(BaseModel):
+    status: str

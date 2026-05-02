@@ -1,35 +1,34 @@
 import { create } from 'zustand';
 import { storageApi } from '@/api/storage';
 
-interface Container {
-  id: number;
-  label: string;
-  status: string;
-  contents_description: string | null;
-  expiry_date: string | null;
-  kbzhu: Record<string, number> | null;
-  location_id: number;
-}
-
-interface StorageLocation {
+export interface InventoryItem {
   id: number;
   name: string;
-  location_type: string;
-  containers: Container[];
+  category: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface StorageLocation {
+  id: number;
+  type: 'fridge' | 'freezer' | 'pantry';
+  name: string;
+  items: InventoryItem[];
 }
 
 interface StorageState {
   locations: StorageLocation[];
-  expiring: Container[];
   loading: boolean;
   error: string | null;
   fetchAll: () => Promise<void>;
-  fetchExpiring: () => Promise<void>;
+  addItem: (payload: { name: string; quantity: number; unit: string; location_type: string; category?: string | null }) => Promise<void>;
+  useItem: (itemId: number, quantity: number) => Promise<void>;
+  deleteItem: (itemId: number) => Promise<void>;
+  clearLocation: (locationType?: 'fridge' | 'freezer' | 'pantry') => Promise<void>;
 }
 
-export const useStorageStore = create<StorageState>((set) => ({
+export const useStorageStore = create<StorageState>((set, get) => ({
   locations: [],
-  expiring: [],
   loading: false,
   error: null,
 
@@ -37,20 +36,31 @@ export const useStorageStore = create<StorageState>((set) => ({
     set({ loading: true, error: null });
     try {
       const data = await storageApi.getAll();
-      set({ locations: data });
+      set({ locations: data.locations ?? [] });
     } catch (e: any) {
-      set({ error: e?.message ?? 'Ошибка загрузки хранилища' });
+      set({ error: e?.message ?? 'Ошибка загрузки хранения' });
     } finally {
       set({ loading: false });
     }
   },
 
-  fetchExpiring: async () => {
-    try {
-      const data = await storageApi.getExpiring(3);
-      set({ expiring: data });
-    } catch {
-      // Non-critical — expiring list stays empty
-    }
+  addItem: async (payload) => {
+    await storageApi.addItem(payload);
+    await get().fetchAll();
+  },
+
+  useItem: async (itemId, quantity) => {
+    await storageApi.useItem(itemId, quantity);
+    await get().fetchAll();
+  },
+
+  deleteItem: async (itemId) => {
+    await storageApi.deleteItem(itemId);
+    await get().fetchAll();
+  },
+
+  clearLocation: async (locationType) => {
+    await storageApi.clearLocation(locationType);
+    await get().fetchAll();
   },
 }));

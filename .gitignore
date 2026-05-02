@@ -1,39 +1,58 @@
-# Secrets
+# --- Secrets ---
 .env
 !.env.example
+*.pem
+*.key
+secrets/
 
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 .venv/
 venv/
+env/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Node / Expo
+# --- Node / Expo / Web build ---
 node_modules/
 mobile/dist/
 mobile/dist2/
+mobile/dist_build/
+mobile/dist_new/
 mobile/.expo/
+mobile/.expo-shared/
 *.tsbuildinfo
-.expo-shared/
+*.log
 
-# OS
+# --- OS noise ---
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# IDE
+# --- Yandex.Disk conflict copies ---
+*копия с компьютера*
+*(копия*
+
+# --- IDE / Editor ---
 .vscode/
 .idea/
+*.swp
+*.swo
+.cursor/
 
-# Logs
-*.log
+# --- Docker ---
+*.pid
 
-# Alembic tmp
-*.pyc
-
-# Personal / Yandex.Disk junk
+# --- Project-local junk ---
 Кулинария/
+.claude/
+serve.py
+serve-web.js
+serve-web-preview.js

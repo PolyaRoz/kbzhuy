@@ -16,13 +16,13 @@ import { profileApi, ProfileCreateRequest, ProfileResponse } from '@/api/profile
 import { usePlanStore } from '@/store/planStore';
 import { shouldInvalidatePlan } from '@/utils/profilePlanInvalidation';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const BORDER = '#E5E7EB';
-const DANGER = '#DC2626';
+const GRAY = '#6E7E70';
+const BORDER = '#D4DAD5';
+const DANGER = '#C8553D';
 
 const GOALS = [
   { id: 'loss', label: 'Похудение' },
@@ -553,7 +553,7 @@ const s = StyleSheet.create({
   loadingText: { color: GRAY, fontSize: 14 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginTop: 12, marginBottom: 8 },
   card: { backgroundColor: CARD, borderRadius: 8, paddingHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
-  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0EEE7' },
   fieldLabel: { fontSize: 15, color: BLACK },
   optional: { fontSize: 11, color: GRAY, marginTop: 2 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },

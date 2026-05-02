@@ -1,0 +1,30 @@
+# Don't ship local dev artifacts into Docker build context
+**/node_modules
+**/dist
+**/dist2
+**/dist_build
+**/dist_new
+**/.expo
+**/.expo-shared
+**/__pycache__
+**/.venv
+**/venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.log
+**/*.tsbuildinfo
+**/.DS_Store
+**/Thumbs.db
+**/.git
+**/.github
+**/.idea
+**/.vscode
+**/.cursor
+**/.claude
+**/*.env
+!**/*.env.example
+**/копия*
+**/*копия с компьютера*
+Кулинария/
+docs/

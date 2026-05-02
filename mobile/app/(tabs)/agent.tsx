@@ -11,13 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useRef } from 'react';
+import { router } from 'expo-router';
 import { agentApi } from '@/api/agent';
+import { usePlanStore } from '@/store/planStore';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
+const GRAY = '#6E7E70';
 
 type Message = {
   id: string;
@@ -38,8 +40,20 @@ const WELCOME_MSG: Message = {
   text: 'Привет! Я твой персональный нутрициолог 🥗\n\nМогу помочь с планом, объяснить что и когда есть, и скорректировать рацион если что-то пошло не так.\n\nЧто хочешь узнать?',
 };
 
+const ONBOARDING_MSG: Message = {
+  id: 'onboarding',
+  role: 'assistant',
+  text: 'Привет! 👋 Я — КБЖУЙ, твой нутрициолог.\n\nЯ составлю план питания на неделю, посчитаю КБЖУ под твои цели и скажу что и когда готовить.\n\nС чего начнём?',
+};
+
 export default function AgentScreen() {
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MSG]);
+  const plan = usePlanStore((s) => s.plan);
+  const hasFetchedCurrent = usePlanStore((s) => s.hasFetchedCurrent);
+
+  // Show onboarding flow until the user has a plan
+  const isOnboarding = hasFetchedCurrent && !plan;
+
+  const [messages, setMessages] = useState<Message[]>([isOnboarding ? ONBOARDING_MSG : WELCOME_MSG]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -52,7 +66,6 @@ export default function AgentScreen() {
     setInput('');
     setLoading(true);
 
-    // Build history for multi-turn context (last 10 messages)
     const history = messages.slice(-10).map((m) => ({
       role: m.role,
       content: m.text,
@@ -76,6 +89,19 @@ export default function AgentScreen() {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
+
+  const handleOnboardingAction = (action: 'plan' | 'storage') => {
+    if (action === 'plan') {
+      router.replace('/(tabs)/plan');
+    } else {
+      router.replace('/(tabs)/storage');
+    }
+  };
+
+  // Show onboarding action cards only on the first message (no user input yet)
+  const showOnboardingCards = isOnboarding && messages.length === 1;
+  // Show regular quick chips for returning users with no additional messages
+  const showQuickChips = !isOnboarding && messages.length <= 1;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -126,10 +152,41 @@ export default function AgentScreen() {
               </View>
             </View>
           )}
+
+          {/* Onboarding action cards — shown as part of message flow */}
+          {showOnboardingCards && (
+            <View style={s.onboardingCards}>
+              <TouchableOpacity
+                style={s.onboardingCard}
+                onPress={() => handleOnboardingAction('plan')}
+                activeOpacity={0.85}
+              >
+                <Text style={s.onboardingCardEmoji}>📋</Text>
+                <View style={s.onboardingCardBody}>
+                  <Text style={s.onboardingCardTitle}>Создать план питания</Text>
+                  <Text style={s.onboardingCardHint}>Меню на неделю, список покупок и план готовки</Text>
+                </View>
+                <Text style={s.onboardingCardArrow}>→</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.onboardingCard}
+                onPress={() => handleOnboardingAction('storage')}
+                activeOpacity={0.85}
+              >
+                <Text style={s.onboardingCardEmoji}>📦</Text>
+                <View style={s.onboardingCardBody}>
+                  <Text style={s.onboardingCardTitle}>Добавить продукты</Text>
+                  <Text style={s.onboardingCardHint}>Сначала укажу что уже есть дома</Text>
+                </View>
+                <Text style={s.onboardingCardArrow}>→</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
 
-        {/* Quick actions (shown only on fresh start) */}
-        {messages.length <= 1 && (
+        {/* Regular quick chips for existing users */}
+        {showQuickChips && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.quickScroll} contentContainerStyle={s.quickRow}>
             {QUICK_ACTIONS.map((qa) => (
               <TouchableOpacity key={qa.id} style={s.quickChip} onPress={() => sendMessage(qa.message)} activeOpacity={0.7}>
@@ -182,24 +239,24 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: CARD,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#D4DAD5',
   },
   headerIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#E8E4D9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerIconText: { fontSize: 20 },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: BLACK },
-  headerSub: { fontSize: 11, color: GRAY },
+  headerIconText: { fontSize: 20, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: BLACK, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3 },
+  headerSub: { fontSize: 11, color: GRAY, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   onlineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#5A7A5C',
     marginLeft: 'auto',
   },
 
@@ -218,7 +275,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  botAvatarText: { fontSize: 14 },
+  botAvatarText: { fontSize: 14, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   bubbleContent: { maxWidth: '80%', borderRadius: 16, padding: 12 },
   bubbleContentUser: {
     backgroundColor: PRIMARY,
@@ -228,9 +285,9 @@ const s = StyleSheet.create({
     backgroundColor: CARD,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#D4DAD5',
   },
-  bubbleText: { fontSize: 14, color: BLACK, lineHeight: 20 },
+  bubbleText: { fontSize: 14, color: BLACK, lineHeight: 20, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   bubbleTextUser: { color: '#FFF' },
 
   typingRow: { flexDirection: 'row', gap: 4, padding: 4 },
@@ -240,6 +297,24 @@ const s = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: PRIMARY,
   },
+
+  // Onboarding action cards
+  onboardingCards: { gap: 10, marginTop: 4, marginLeft: 38 },
+  onboardingCard: {
+    backgroundColor: CARD,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D4DAD5',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  onboardingCardEmoji: { fontSize: 28 },
+  onboardingCardBody: { flex: 1 },
+  onboardingCardTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 3, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3 },
+  onboardingCardHint: { fontSize: 12, color: GRAY, lineHeight: 17, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
+  onboardingCardArrow: { fontSize: 18, color: PRIMARY, fontWeight: '700' },
 
   quickScroll: { maxHeight: 52 },
   quickRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
@@ -251,7 +326,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D1FAE5',
   },
-  quickChipText: { fontSize: 12, color: PRIMARY, fontWeight: '600' },
+  quickChipText: { fontSize: 12, color: PRIMARY, fontWeight: '600', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
 
   inputRow: {
     flexDirection: 'row',
@@ -260,7 +335,7 @@ const s = StyleSheet.create({
     padding: 12,
     backgroundColor: CARD,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#D4DAD5',
   },
   input: {
     flex: 1,
@@ -272,7 +347,8 @@ const s = StyleSheet.create({
     color: BLACK,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#D4DAD5',
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
   },
   sendBtn: {
     width: 40,
@@ -283,5 +359,5 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnDisabled: { opacity: 0.4 },
-  sendBtnText: { color: '#FFF', fontSize: 20, fontWeight: '700', lineHeight: 22 },
+  sendBtnText: { color: '#FFF', fontSize: 20, fontWeight: '700', lineHeight: 22, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
 });

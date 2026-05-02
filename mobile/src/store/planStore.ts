@@ -42,6 +42,7 @@ interface PlanState {
   replaceMeal: (mealId: number) => Promise<void>;
   rebuildDay: (dayId: number) => Promise<void>;
   markEaten: (mealId: number) => void;
+  setMealStatus: (mealId: number, status: string) => void;
   hydratePlan: () => Promise<void>;
   clearPlan: () => Promise<void>;
 }
@@ -136,6 +137,20 @@ export const usePlanStore = create<PlanState>((set, get) => ({
         days: plan.days.map((d) => ({
           ...d,
           meals: d.meals.map((m) => (m.id === mealId ? { ...m, status: 'eaten' } : m)),
+        })),
+      },
+    });
+  },
+
+  setMealStatus: (mealId, status) => {
+    const plan = get().plan;
+    if (!plan) return;
+    set({
+      plan: {
+        ...plan,
+        days: plan.days.map((d) => ({
+          ...d,
+          meals: d.meals.map((m) => (m.id === mealId ? { ...m, status } : m)),
         })),
       },
     });

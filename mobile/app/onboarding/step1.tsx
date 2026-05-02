@@ -3,12 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useState } from 'react';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const BORDER = '#E5E7EB';
+const GRAY = '#6E7E70';
+const BORDER = '#D4DAD5';
 
 const ACTIVITY_OPTIONS = [
   { id: 'sedentary', label: 'Офис, без спорта' },
@@ -162,30 +162,30 @@ export default function Step1() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { padding: 24, paddingBottom: 36 },
-  progressBar: { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, marginBottom: 6 },
+  progressBar: { height: 4, backgroundColor: '#D4DAD5', borderRadius: 2, marginBottom: 6 },
   progressFill: { height: 4, backgroundColor: PRIMARY, borderRadius: 2 },
-  step: { fontSize: 12, color: GRAY, marginBottom: 24 },
-  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 },
-  sub: { fontSize: 14, color: GRAY, marginBottom: 22 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 8, marginTop: 8 },
-  sectionHint: { fontSize: 12, color: GRAY, marginBottom: 10 },
+  step: { fontSize: 12, color: GRAY, marginBottom: 24 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.52},
+  sub: { fontSize: 14, color: GRAY, marginBottom: 22 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 8, marginTop: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
+  sectionHint: { fontSize: 12, color: GRAY, marginBottom: 10 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   card: { backgroundColor: CARD, borderRadius: 8, paddingHorizontal: 14, marginBottom: 16, borderWidth: 1, borderColor: BORDER },
-  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  fieldLabel: { fontSize: 15, color: BLACK },
-  optional: { fontSize: 11, color: GRAY, marginTop: 2 },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0EEE7' },
+  fieldLabel: { fontSize: 15, color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  optional: { fontSize: 11, color: GRAY, marginTop: 2 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  input: { fontSize: 17, fontWeight: '800', color: PRIMARY, textAlign: 'right', minWidth: 84 },
-  unit: { fontSize: 13, color: GRAY },
+  input: { fontSize: 17, fontWeight: '800', color: PRIMARY, textAlign: 'right', minWidth: 84 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  unit: { fontSize: 13, color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   twoCol: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   choice: { flex: 1, backgroundColor: CARD, borderRadius: 8, paddingVertical: 12, alignItems: 'center', borderWidth: 1.5, borderColor: BORDER },
   activityBtn: { backgroundColor: CARD, borderRadius: 8, padding: 14, marginBottom: 8, borderWidth: 1.5, borderColor: BORDER },
   choiceActive: { borderColor: PRIMARY, backgroundColor: '#F0FDF4' },
-  choiceText: { color: GRAY, fontSize: 14, fontWeight: '700' },
+  choiceText: { color: GRAY, fontSize: 14, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   choiceTextActive: { color: PRIMARY },
   dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   dayChip: { minWidth: 44, alignItems: 'center', borderRadius: 8, paddingVertical: 9, paddingHorizontal: 10, backgroundColor: CARD, borderWidth: 1.5, borderColor: BORDER },
   dayText: { color: GRAY, fontWeight: '800' },
-  textInput: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 13, fontSize: 15, color: BLACK, marginBottom: 16 },
+  textInput: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 13, fontSize: 15, color: BLACK, marginBottom: 16 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   btn: { backgroundColor: PRIMARY, borderRadius: 8, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
-  btnText: { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  btnText: { color: '#FFF', fontSize: 17, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });

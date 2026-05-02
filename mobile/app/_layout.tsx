@@ -43,7 +43,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   return (
     <QueryProvider>
-      <StatusBar style="dark" backgroundColor="#F6FAF7" />
+      <StatusBar style="dark" backgroundColor="#FAFAF7" />
       <AuthGate>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />

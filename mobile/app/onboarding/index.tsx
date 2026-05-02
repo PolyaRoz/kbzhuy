@@ -14,13 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const BORDER = '#E5E7EB';
-const DANGER = '#DC2626';
+const GRAY = '#6E7E70';
+const BORDER = '#D4DAD5';
+const DANGER = '#C8553D';
 
 type Mode = 'login' | 'register';
 
@@ -136,8 +136,8 @@ export default function OnboardingEntryScreen() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  title: { fontSize: 32, fontWeight: '800', color: BLACK, marginBottom: 8 },
-  sub: { fontSize: 15, color: GRAY, marginBottom: 24, lineHeight: 22 },
+  title: { fontSize: 32, fontWeight: '800', color: BLACK, marginBottom: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.64},
+  sub: { fontSize: 15, color: GRAY, marginBottom: 24, lineHeight: 22 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   modeRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   modeButton: {
     flex: 1,
@@ -149,7 +149,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   modeButtonActive: { borderColor: PRIMARY, backgroundColor: '#F0FDF4' },
-  modeText: { fontSize: 15, fontWeight: '700', color: GRAY },
+  modeText: { fontSize: 15, fontWeight: '700', color: GRAY , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   modeTextActive: { color: PRIMARY },
   card: {
     backgroundColor: CARD,
@@ -158,7 +158,7 @@ const s = StyleSheet.create({
     borderColor: BORDER,
     padding: 18,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: BLACK, marginBottom: 14 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: BLACK, marginBottom: 14 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.36},
   input: {
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
@@ -169,9 +169,9 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: BLACK,
     marginBottom: 10,
-  },
-  hint: { fontSize: 13, color: GRAY, marginTop: 2, marginBottom: 6 },
-  error: { fontSize: 13, color: DANGER, marginBottom: 10 },
+  fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  hint: { fontSize: 13, color: GRAY, marginTop: 2, marginBottom: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  error: { fontSize: 13, color: DANGER, marginBottom: 10 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   primaryButton: {
     marginTop: 6,
     backgroundColor: PRIMARY,
@@ -180,5 +180,5 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 15,
   },
-  primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFF' },
+  primaryButtonText: { fontSize: 16, fontWeight: '800', color: '#FFF' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });

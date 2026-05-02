@@ -1,4 +1,17 @@
-FROM nginx:alpine
+# --- Stage 1: build the Expo web bundle ---
+FROM node:20-alpine AS builder
+WORKDIR /build
 
+# Install deps first (cached layer)
+COPY mobile/package.json mobile/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+# Copy the rest and export web bundle
+COPY mobile/ ./
+RUN npx expo export --platform web --output-dir dist
+
+# --- Stage 2: serve via nginx ---
+FROM nginx:alpine
 COPY infra/nginx/web.conf /etc/nginx/conf.d/default.conf
-COPY mobile/dist /usr/share/nginx/html
+COPY --from=builder /build/dist /usr/share/nginx/html
+EXPOSE 80

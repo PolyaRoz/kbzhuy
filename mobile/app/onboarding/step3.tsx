@@ -3,12 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
-const PRIMARY = '#1A7340';
-const BG = '#F6FAF7';
+const PRIMARY = '#2B3A2E';
+const BG = '#FAFAF7';
 const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
-const GRAY = '#6B7280';
-const BORDER = '#E5E7EB';
+const GRAY = '#6E7E70';
+const BORDER = '#D4DAD5';
 
 type MealSlot = { id: string; name: string; time: string };
 
@@ -110,21 +110,21 @@ export default function Step3() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { padding: 24, paddingBottom: 36 },
-  progressBar: { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, marginBottom: 6 },
+  progressBar: { height: 4, backgroundColor: '#D4DAD5', borderRadius: 2, marginBottom: 6 },
   progressFill: { height: 4, backgroundColor: PRIMARY, borderRadius: 2 },
-  step: { fontSize: 12, color: GRAY, marginBottom: 12 },
+  step: { fontSize: 12, color: GRAY, marginBottom: 12 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingRight: 12, marginBottom: 8 },
-  backText: { color: PRIMARY, fontSize: 15, fontWeight: '800' },
-  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 },
-  sub: { fontSize: 14, color: GRAY, marginBottom: 20, lineHeight: 20 },
+  backText: { color: PRIMARY, fontSize: 15, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  title: { fontSize: 26, fontWeight: '800', color: BLACK, marginBottom: 6 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.52},
+  sub: { fontSize: 14, color: GRAY, marginBottom: 20, lineHeight: 20 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   mealCard: { backgroundColor: CARD, borderRadius: 8, padding: 14, borderWidth: 1, borderColor: BORDER, marginBottom: 12 },
   mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  mealTitle: { fontSize: 15, fontWeight: '800', color: BLACK },
-  removeText: { color: '#DC2626', fontWeight: '700', fontSize: 13 },
-  nameInput: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: BLACK, fontSize: 15, marginBottom: 8 },
-  timeInput: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: PRIMARY, fontSize: 16, fontWeight: '800' },
+  mealTitle: { fontSize: 15, fontWeight: '800', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3},
+  removeText: { color: '#C8553D', fontWeight: '700', fontSize: 13 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  nameInput: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: BLACK, fontSize: 15, marginBottom: 8 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  timeInput: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: PRIMARY, fontSize: 16, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   addBtn: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1.5, borderColor: PRIMARY, paddingVertical: 14, alignItems: 'center', marginBottom: 12 },
-  addBtnText: { color: PRIMARY, fontSize: 15, fontWeight: '800' },
+  addBtnText: { color: PRIMARY, fontSize: 15, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   btn: { backgroundColor: PRIMARY, borderRadius: 8, paddingVertical: 16, alignItems: 'center' },
-  btnText: { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  btnText: { color: '#FFF', fontSize: 17, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
 });
