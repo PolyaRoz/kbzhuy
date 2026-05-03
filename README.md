@@ -350,8 +350,6 @@ docker compose -f infra/docker-compose.dev.yml logs -f api | grep gigachat
 
 Полина Розанова  ·  [@PolyaRoz](https://github.com/PolyaRoz)
 
-Создано в рамках конкурса от Сбера.
-
 ---
 
 > © 2026 Полина Розанова. Все права защищены.
