@@ -2,8 +2,10 @@
 chcp 65001 >nul
 cd /d %~dp0
 
-set KBZHUY_USE_GIGACHAT=false
-set KBZHUY_GIGACHAT_CREDENTIALS=
+REM Disable GigaChat by flipping the toggle in .env.gigachat (the file is loaded by docker-compose).
+if exist .env.gigachat (
+    powershell -NoProfile -Command "(Get-Content .env.gigachat) -replace 'KBZHUY_USE_GIGACHAT=true','KBZHUY_USE_GIGACHAT=false' | Set-Content .env.gigachat"
+)
 
 echo [GigaChat] Перезапускаю API без GigaChat (rule-based агент)...
 docker compose -f infra/docker-compose.dev.yml up -d --no-deps api

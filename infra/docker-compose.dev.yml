@@ -2,6 +2,11 @@ services:
   api:
     build:
       context: ../backend
+    # Optional GigaChat credentials. Loaded automatically when the file exists,
+    # so the API survives container restarts even if the toggling shell env is gone.
+    env_file:
+      - path: ../.env.gigachat
+        required: false
     environment:
       KBZHUY_DATABASE_URL: postgresql+asyncpg://kbzhuy:kbzhuy@db:5432/kbzhuy
       KBZHUY_REDIS_URL: redis://redis:6379/0
@@ -11,9 +16,8 @@ services:
       KBZHUY_USE_LOCAL_LLM: ${KBZHUY_USE_LOCAL_LLM:-false}
       KBZHUY_LOCAL_LLM_URL: ${KBZHUY_LOCAL_LLM_URL:-http://host.docker.internal:11434/v1}
       KBZHUY_LOCAL_LLM_MODEL: ${KBZHUY_LOCAL_LLM_MODEL:-qwen2.5:14b}
-      KBZHUY_USE_GIGACHAT: ${KBZHUY_USE_GIGACHAT:-false}
-      KBZHUY_GIGACHAT_CREDENTIALS: ${KBZHUY_GIGACHAT_CREDENTIALS:-}
-      KBZHUY_GIGACHAT_MODEL: ${KBZHUY_GIGACHAT_MODEL:-GigaChat}
+      # GigaChat vars come from ../.env.gigachat (loaded via env_file above).
+      # When that file is absent the API falls back to SimpleAgent — no extra config needed.
       PYTHONPATH: /app
     volumes:
       - ../data:/app/data:ro
