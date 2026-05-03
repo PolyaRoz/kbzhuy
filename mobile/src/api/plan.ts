@@ -56,18 +56,19 @@ export interface GeneratePlanRequest {
 
 export type MealStatus = 'planned' | 'eaten' | 'skipped';
 
-// Returns Monday of the current week, so /plan/current can show the generated plan immediately.
-function currentMonday(): string {
+// Returns the coming Monday (always in the future — plan is created for next week).
+// Mon→+7, Tue→+6, Wed→+5, Thu→+4, Fri→+3, Sat→+2, Sun→+1
+function nextMonday(): string {
   const d = new Date();
   const day = d.getDay(); // 0=Sun, 1=Mon
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  const daysUntil = day === 0 ? 1 : 8 - day;
+  d.setDate(d.getDate() + daysUntil);
   return d.toISOString().slice(0, 10);
 }
 
 export const planApi = {
   generate: (request: GeneratePlanRequest = {}): Promise<GenerateResponse> => {
-    const period_start = request.period_start ?? currentMonday();
+    const period_start = request.period_start ?? nextMonday();
     const start = new Date(period_start);
     start.setDate(start.getDate() + 6);
     const period_end = request.period_end ?? start.toISOString().slice(0, 10);

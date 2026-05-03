@@ -29,10 +29,13 @@ export interface TrayComment {
 }
 
 export const trayApi = {
-  list: (category?: PostCategory) =>
+  list: (category?: PostCategory, my?: boolean) =>
     apiClient
       .get<{ items: TrayPost[] }>('/tray/posts', {
-        params: category ? { category } : {},
+        params: {
+          ...(category ? { category } : {}),
+          ...(my ? { my: 'true' } : {}),
+        },
       })
       .then((r) => r.data),
 

@@ -1,5 +1,5 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -43,6 +43,23 @@ const GRAY = '#6E7E70';
 
 
 const BORDER = '#D4DAD5';
+
+const MONTH_S = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+function cookingNextMonday(): string {
+  const d = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? 1 : 8 - day));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function cookingPlusDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function cookingFormatDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return `${d.getDate()} ${MONTH_S[d.getMonth()]}`;
+}
 
 
 
@@ -303,12 +320,18 @@ export default function CookingScreen() {
 
 
   const [packingGroup, setPackingGroup] = useState<string | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const isFirstRender = useRef(true);
+  const baseMonday = cookingNextMonday();
+  const periodStart = weekOffset === 0 ? baseMonday : cookingPlusDays(baseMonday, 7 * weekOffset);
+  const periodEnd = cookingPlusDays(periodStart, 6);
+  const weekLabel = weekOffset === 0 ? 'Следующая неделя' : `Через ${weekOffset + 1} нед.`;
 
 
 
 
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (offset: number = 0) => {
 
 
     setLoading(true);
@@ -320,7 +343,9 @@ export default function CookingScreen() {
     try {
 
 
-      const planData = await cookingApi.getPlan();
+      const planData = offset > 0
+        ? await cookingApi.getPlanByPeriod(cookingPlusDays(cookingNextMonday(), 7 * offset))
+        : await cookingApi.getPlan();
 
 
       setPlan(planData);
@@ -335,7 +360,7 @@ export default function CookingScreen() {
       if (err?.response?.status === 404) {
 
 
-        setError('Сначала нужен активный план питания');
+        setError(offset > 0 ? 'Нет плана для этого периода' : 'Сначала нужен активный план питания');
 
 
       } else {
@@ -362,27 +387,36 @@ export default function CookingScreen() {
 
 
 
+  const weekOffsetRef = useRef(weekOffset);
+  weekOffsetRef.current = weekOffset;
+
   useFocusEffect(
-
-
     useCallback(() => {
-
-
-      void loadData();
-
-
+      void loadData(weekOffsetRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loadData]),
-
-
   );
 
   // When a new plan is created in another tab, reload cooking plan automatically
   useEffect(() => {
     if (globalPlan) {
-      void loadData();
+      void loadData(weekOffset);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalPlan]);
+
+  // When week offset changes (skip initial mount — useFocusEffect handles that)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setPlan(null);
+    setPackedGroups(new Set());
+    setPackedItemIds({});
+    void loadData(weekOffset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekOffset]);
 
 
 
@@ -807,7 +841,12 @@ export default function CookingScreen() {
       <SafeAreaView style={s.safe}>
 
 
-        <Text style={[s.title, { padding: 16 }]}>Готовка</Text>
+        <View style={[s.titleRow, { padding: 16 }]}>
+          <Text style={s.title}>Готовка</Text>
+          <TouchableOpacity style={s.navChipNext} onPress={() => setWeekOffset((v) => v + 1)} activeOpacity={0.8}>
+            <Text style={s.navChipNextText}>Сл. готовка →</Text>
+          </TouchableOpacity>
+        </View>
 
 
         <ActivityIndicator color={PRIMARY} style={{ marginTop: 40 }} />
@@ -826,7 +865,7 @@ export default function CookingScreen() {
 
 
   if (!plan || plan.steps.length === 0) {
-    const isNoPlan = !plan && error === 'Сначала нужен активный план питания';
+    const isNoPlan = !plan && (error === 'Сначала нужен активный план питания' || error === 'Нет плана для этого периода');
 
     return (
 
@@ -837,17 +876,32 @@ export default function CookingScreen() {
         <View style={s.content}>
 
 
-          <Text style={s.title}>Готовка</Text>
+          <View style={s.titleRow}>
+            <View>
+              <Text style={s.title}>Готовка</Text>
+              {weekOffset > 0 ? <Text style={s.weekSubLabel}>{weekLabel} · {cookingFormatDate(periodStart)} — {cookingFormatDate(periodEnd)}</Text> : null}
+            </View>
+            <View style={s.headerNavRow}>
+              {weekOffset > 0 ? (
+                <TouchableOpacity style={s.navChip} onPress={() => setWeekOffset((v) => Math.max(0, v - 1))} activeOpacity={0.8}>
+                  <Text style={s.navChipText}>← Назад</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity style={s.navChipNext} onPress={() => setWeekOffset((v) => v + 1)} activeOpacity={0.8}>
+                <Text style={s.navChipNextText}>Сл. готовка →</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {isNoPlan ? (
             <View style={s.noPlanCard}>
               <View style={s.noPlanIconWrap}>
                 <Ionicons name="flame-outline" size={32} color={PRIMARY} />
               </View>
-              <Text style={s.noPlanTitle}>Нет плана питания</Text>
-              <Text style={s.noPlanHint}>План готовки собирается автоматически из меню: шаги, время и фасовка по контейнерам.</Text>
+              <Text style={s.noPlanTitle}>{weekOffset > 0 ? 'Нет плана на этот период' : 'Нет плана питания'}</Text>
+              <Text style={s.noPlanHint}>{weekOffset > 0 ? 'Сначала создайте план питания на эту неделю во вкладке «План».' : 'План готовки собирается автоматически из меню: шаги, время и фасовка по контейнерам.'}</Text>
               <TouchableOpacity style={s.noPlanBtn} onPress={() => router.push('/(tabs)/plan')} activeOpacity={0.85}>
-                <Text style={s.noPlanBtnText}>Создать план</Text>
+                <Text style={s.noPlanBtnText}>{weekOffset > 0 ? 'Перейти к плану' : 'Создать план'}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -925,11 +979,20 @@ export default function CookingScreen() {
 
 
         <View style={s.titleRow}>
-
-
-          <Text style={s.title}>Готовка</Text>
-
-
+          <View>
+            <Text style={s.title}>Готовка</Text>
+            {weekOffset > 0 ? <Text style={s.weekSubLabel}>{weekLabel} · {cookingFormatDate(periodStart)} — {cookingFormatDate(periodEnd)}</Text> : null}
+          </View>
+          <View style={s.headerNavRow}>
+            {weekOffset > 0 ? (
+              <TouchableOpacity style={s.navChip} onPress={() => setWeekOffset((v) => Math.max(0, v - 1))} activeOpacity={0.8}>
+                <Text style={s.navChipText}>← Назад</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity style={s.navChipNext} onPress={() => setWeekOffset((v) => v + 1)} activeOpacity={0.8}>
+              <Text style={s.navChipNextText}>Сл. готовка →</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
 
@@ -2358,6 +2421,24 @@ const s = StyleSheet.create({
   noPlanHint: { fontSize: 14, color: GRAY, lineHeight: 20, textAlign: 'center', marginBottom: 20, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   noPlanBtn: { backgroundColor: PRIMARY, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 13 },
   noPlanBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
+  headerNavRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  weekSubLabel: { fontSize: 12, color: GRAY, marginTop: 3, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
+  navChip: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#E8E4D9',
+    borderWidth: 1,
+    borderColor: '#D4DAD5',
+  },
+  navChipText: { fontSize: 12, fontWeight: '700', color: GRAY, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
+  navChipNext: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: PRIMARY,
+  },
+  navChipNextText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
 });
 
 

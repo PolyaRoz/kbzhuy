@@ -171,9 +171,8 @@ async def get_current_plan(
         select(MealPlan)
         .where(MealPlan.user_id == user_id)
         .where(MealPlan.status == "active")
-        .where(MealPlan.period_start <= today)
-        .where(MealPlan.period_end >= today)
-        .order_by(MealPlan.created_at.desc(), MealPlan.id.desc())
+        .where(MealPlan.period_end >= today)          # exclude expired plans
+        .order_by(MealPlan.period_start.asc(), MealPlan.id.desc())  # nearest start first
         .options(
             selectinload(MealPlan.days).selectinload(DayPlan.meals).selectinload(Meal.container)
         )

@@ -4,6 +4,9 @@ export const cookingApi = {
   getPlan: () =>
     apiClient.get('/cooking/plan').then((r) => r.data),
 
+  getPlanByPeriod: (periodStart: string) =>
+    apiClient.get(`/cooking/plan/period/${periodStart}`).then((r) => r.data),
+
   generatePlan: () =>
     apiClient.post('/cooking/generate').then((r) => r.data),
 

@@ -23,12 +23,12 @@ const BLACK = '#1A1A1A';
 const GRAY = '#6E7E70';
 const BORDER = '#D4DAD5';
 
-const CATEGORIES: Array<{ key: PostCategory; label: string; emoji: string }> = [
-  { key: 'recipe', label: 'Рецепт', emoji: '🍳' },
-  { key: 'lifehack', label: 'Лайфхак', emoji: '💡' },
-  { key: 'progress', label: 'Прогресс', emoji: '📈' },
-  { key: 'idea', label: 'Идея', emoji: '💭' },
-  { key: 'discussion', label: 'Обсуждение', emoji: '💬' },
+const CATEGORIES: Array<{ key: PostCategory; label: string; icon: string; color: string }> = [
+  { key: 'recipe',     label: 'Рецепт',      icon: 'restaurant-outline',  color: '#C9A14B' },
+  { key: 'lifehack',   label: 'Лайфхак',     icon: 'flash-outline',       color: '#4A5C4D' },
+  { key: 'progress',   label: 'Прогресс',    icon: 'trending-up-outline', color: '#5A7A5C' },
+  { key: 'idea',       label: 'Идея',        icon: 'bulb-outline',        color: '#C8553D' },
+  { key: 'discussion', label: 'Обсуждение',  icon: 'chatbubbles-outline', color: '#6E7E70' },
 ];
 
 const MAX_IMAGE_WIDTH = 1200;
@@ -148,8 +148,9 @@ export default function CreatePostScreen() {
                   onPress={() => setCategory(c.key)}
                   activeOpacity={0.8}
                 >
+                  <Ionicons name={c.icon as any} size={12} color={active ? '#FFF' : GRAY} />
                   <Text style={[s.catBtnText, active && s.catBtnTextActive]}>
-                    {c.emoji} {c.label}
+                    {c.label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -255,6 +256,9 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   catBtnActive: { backgroundColor: PRIMARY, borderColor: PRIMARY },
   catBtnText: { color: GRAY, fontSize: 13, fontWeight: '700', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },

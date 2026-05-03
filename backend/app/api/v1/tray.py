@@ -62,6 +62,7 @@ def _serialize_post(post: Post, like_count: int, comment_count: int, liked_by_me
 @router.get("/posts")
 async def list_posts(
     category: Optional[str] = Query(default=None),
+    my: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     user_id: int = Depends(get_current_user_id),
@@ -71,6 +72,8 @@ async def list_posts(
         raise HTTPException(status_code=400, detail="Invalid category")
 
     stmt = select(Post).options(selectinload(Post.user)).order_by(Post.created_at.desc()).offset(offset).limit(limit)
+    if my:
+        stmt = stmt.where(Post.user_id == user_id)
     if category:
         stmt = stmt.where(Post.category == category)
     posts = (await db.execute(stmt)).scalars().all()

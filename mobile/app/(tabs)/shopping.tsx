@@ -12,6 +12,14 @@ const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
 const GRAY = '#6E7E70';
 
+const MONTH_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+function formatShortDate(iso?: string | null) {
+  if (!iso) return '';
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getDate()} ${MONTH_SHORT[d.getMonth()]}`;
+}
+
 const CATEGORY_ICON: Record<string, string> = {
   'Мясо и птица': 'restaurant-outline',
   'Рыба и морепродукты': 'fish-outline',
@@ -164,8 +172,10 @@ export default function ShoppingScreen() {
         <View style={s.content}>
           <Text style={s.title}>Покупки</Text>
           <View style={s.doneCard}>
-            <Text style={s.doneEmoji}>🎉</Text>
-            <Text style={s.doneTitle}>Все куплено!</Text>
+            <View style={s.doneIconWrap}>
+              <Ionicons name="checkmark" size={28} color="#5A7A5C" />
+            </View>
+            <Text style={s.doneTitle}>Список закрыт.</Text>
             <Text style={s.doneHint}>{totalItems} {totalItems === 1 ? 'позиция' : totalItems < 5 ? 'позиции' : 'позиций'} уже дома</Text>
           </View>
         </View>
@@ -193,7 +203,11 @@ export default function ShoppingScreen() {
         <View style={s.progressCard}>
           <View style={s.progressRow}>
             <View>
-              <Text style={s.progressLabel}>Список на эту неделю</Text>
+              <Text style={s.progressLabel}>
+                {plan
+                  ? `Покупки: ${formatShortDate(plan.period_start)} — ${formatShortDate(plan.period_end)}`
+                  : 'Покупки на следующий период'}
+              </Text>
               <Text style={s.progressCount}>{boughtItems} из {totalItems} позиций</Text>
             </View>
             <View style={s.progressCircle}>
@@ -229,7 +243,7 @@ export default function ShoppingScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={[s.checkbox, (item.checked || isSelected) && s.checkboxChecked]}>
-                    {(item.checked || isSelected) ? <Text style={s.checkmark}>✓</Text> : null}
+                    {(item.checked || isSelected) ? <Ionicons name="checkmark" size={14} color="#FFF" /> : null}
                   </View>
 
                   <View style={s.itemBody}>
@@ -332,7 +346,6 @@ const s = StyleSheet.create({
   itemSelected: { borderColor: PRIMARY, backgroundColor: '#F7FCF8' },
   checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: '#D4DAD5', alignItems: 'center', justifyContent: 'center' },
   checkboxChecked: { backgroundColor: PRIMARY, borderColor: PRIMARY },
-  checkmark: { color: '#FFF', fontSize: 13, fontWeight: '700' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   itemBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   itemName: { fontSize: 14, fontWeight: '500', color: BLACK , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   itemNameChecked: { textDecorationLine: 'line-through', color: GRAY },

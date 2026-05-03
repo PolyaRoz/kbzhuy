@@ -2,9 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.security import get_current_user_id
 from app.ai.agent import AgentService
+from app.ai.simple_agent import SimpleAgentService
+
+
+def _get_agent(session: AsyncSession):
+    """Return SimpleAgentService unless a real API key is configured."""
+    settings = get_settings()
+    if settings.anthropic_api_key or settings.use_local_llm:
+        return AgentService(session)
+    return SimpleAgentService(session)
 
 router = APIRouter()
 
@@ -31,7 +41,7 @@ async def chat_with_agent(
     user_id: int = Depends(get_current_user_id),
     session: AsyncSession = Depends(get_session),
 ):
-    svc = AgentService(session)
+    svc = _get_agent(session)
     try:
         result = await svc.chat(
             user_id=user_id,
@@ -52,7 +62,7 @@ async def adapt_plan(
     """
     Quick adapt: register deviation and return recalculated targets without full chat.
     """
-    svc = AgentService(session)
+    svc = _get_agent(session)
     message = f"Я отклонился от плана: {body.reason}."
     if body.kcal_extra:
         message += f" Это примерно {body.kcal_extra} лишних ккал."

@@ -118,6 +118,52 @@ async def get_cooking_plan(
     return _serialize_cooking_plan(plan)
 
 
+@router.get("/plan/period/{period_start}")
+async def get_cooking_plan_by_period(
+    period_start: str,
+    user_id: int = Depends(get_current_user_id),
+    session: AsyncSession = Depends(get_session),
+):
+    from datetime import date as date_type
+    try:
+        period_start_date = date_type.fromisoformat(period_start)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+
+    result = await session.execute(
+        select(MealPlan)
+        .where(MealPlan.user_id == user_id)
+        .where(MealPlan.status == "active")
+        .where(MealPlan.period_start == period_start_date)
+    )
+    meal_plan = result.scalars().first()
+    if not meal_plan:
+        raise HTTPException(status_code=404, detail="No meal plan for this period")
+
+    result = await session.execute(
+        select(CookingPlan)
+        .where(CookingPlan.user_id == user_id)
+        .where(CookingPlan.plan_id == meal_plan.id)
+        .options(selectinload(CookingPlan.steps))
+    )
+    plan = result.scalars().first()
+    meta = plan.container_distribution if plan else {}
+    if not plan or not isinstance(meta, dict) or meta.get("version") != COOKING_PLAN_VERSION:
+        svc = CookingPlannerService(session)
+        plan = await svc.build_for_plan(
+            user_id=user_id,
+            meal_plan_id=meal_plan.id,
+            scheduled_date=meal_plan.period_start,
+        )
+        result = await session.execute(
+            select(CookingPlan)
+            .where(CookingPlan.id == plan.id)
+            .options(selectinload(CookingPlan.steps))
+        )
+        plan = result.scalar_one()
+    return _serialize_cooking_plan(plan)
+
+
 @router.post("/generate")
 async def generate_cooking_plan(
     user_id: int = Depends(get_current_user_id),

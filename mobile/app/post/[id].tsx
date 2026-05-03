@@ -171,8 +171,9 @@ export default function PostDetailScreen() {
 
           <View style={s.body}>
             <View style={[s.catBadge, { backgroundColor: `${meta.color}15`, borderColor: `${meta.color}40` }]}>
+              <Ionicons name={meta.icon as any} size={10} color={meta.color} />
               <Text style={[s.catBadgeText, { color: meta.color }]}>
-                {meta.emoji} {meta.label}
+                {meta.label}
               </Text>
             </View>
 
@@ -282,6 +283,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   catBadgeText: { fontSize: 11, fontWeight: '800', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   title: {

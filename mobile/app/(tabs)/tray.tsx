@@ -21,39 +21,43 @@ const GRAY = '#6E7E70';
 const BORDER = '#D4DAD5';
 
 interface CategoryDef {
-  key: PostCategory | 'all';
+  key: PostCategory | 'all' | 'mine';
   label: string;
-  emoji: string;
+  icon: string | null;
+  color: string;
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: 'all', label: 'Все', emoji: '✨' },
-  { key: 'recipe', label: 'Рецепты', emoji: '🍳' },
-  { key: 'lifehack', label: 'Лайфхаки', emoji: '💡' },
-  { key: 'progress', label: 'Прогресс', emoji: '📈' },
-  { key: 'idea', label: 'Идеи', emoji: '💭' },
-  { key: 'discussion', label: 'Обсуждения', emoji: '💬' },
+  { key: 'all',        label: 'Все',          icon: null,                   color: PRIMARY },
+  { key: 'recipe',     label: 'Рецепты',      icon: 'restaurant-outline',   color: '#C9A14B' },
+  { key: 'lifehack',   label: 'Лайфхаки',     icon: 'flash-outline',        color: '#4A5C4D' },
+  { key: 'progress',   label: 'Прогресс',     icon: 'trending-up-outline',  color: '#5A7A5C' },
+  { key: 'idea',       label: 'Идеи',         icon: 'bulb-outline',         color: '#C8553D' },
+  { key: 'discussion', label: 'Обсуждения',   icon: 'chatbubbles-outline',  color: '#6E7E70' },
+  { key: 'mine',       label: 'Мои посты',    icon: 'person-outline',       color: PRIMARY },
 ];
 
-export const CATEGORY_META: Record<PostCategory, { label: string; emoji: string; color: string }> = {
-  recipe: { label: 'Рецепт', emoji: '🍳', color: '#C9A14B' },
-  lifehack: { label: 'Лайфхак', emoji: '💡', color: '#4A5C4D' },
-  progress: { label: 'Прогресс', emoji: '📈', color: '#5A7A5C' },
-  idea: { label: 'Идея', emoji: '💭', color: '#8B6FB1' },
-  discussion: { label: 'Обсуждение', emoji: '💬', color: '#6E7E70' },
+export const CATEGORY_META: Record<PostCategory, { label: string; icon: string; color: string }> = {
+  recipe:     { label: 'Рецепт',      icon: 'restaurant-outline',   color: '#C9A14B' },
+  lifehack:   { label: 'Лайфхак',     icon: 'flash-outline',        color: '#4A5C4D' },
+  progress:   { label: 'Прогресс',    icon: 'trending-up-outline',  color: '#5A7A5C' },
+  idea:       { label: 'Идея',        icon: 'bulb-outline',         color: '#C8553D' },
+  discussion: { label: 'Обсуждение',  icon: 'chatbubbles-outline',  color: '#6E7E70' },
 };
 
 export default function TrayScreen() {
   const [posts, setPosts] = useState<TrayPost[]>([]);
-  const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all');
+  const [activeCategory, setActiveCategory] = useState<PostCategory | 'all' | 'mine'>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchPosts = useCallback(async (category: PostCategory | 'all', refresh = false) => {
+  const fetchPosts = useCallback(async (category: PostCategory | 'all' | 'mine', refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const data = await trayApi.list(category === 'all' ? undefined : category);
+      const isMine = category === 'mine';
+      const cat = !isMine && category !== 'all' ? (category as PostCategory) : undefined;
+      const data = await trayApi.list(cat, isMine);
       setPosts(data.items ?? []);
     } catch {
       setPosts([]);
@@ -67,7 +71,7 @@ export default function TrayScreen() {
     void fetchPosts(activeCategory);
   }, [activeCategory, fetchPosts]);
 
-  // Refresh on tab focus to pick up new posts/likes from other tabs
+  // Refresh on tab focus to pick up new posts/likes from other users
   useFocusEffect(
     useCallback(() => {
       void fetchPosts(activeCategory, true);
@@ -102,64 +106,88 @@ export default function TrayScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      {/* ── fixed header ── */}
       <View style={s.headerRow}>
         <Text style={s.title}>Поднос</Text>
-        <TouchableOpacity
-          style={s.createBtn}
-          onPress={() => router.push('/post/create')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={18} color="#FFF" />
-          <Text style={s.createBtnText}>Пост</Text>
-        </TouchableOpacity>
+        <View style={s.headerActions}>
+          <TouchableOpacity
+            style={s.refreshBtn}
+            onPress={() => fetchPosts(activeCategory, true)}
+            activeOpacity={0.7}
+            disabled={refreshing}
+          >
+            <Ionicons name="refresh" size={18} color={refreshing ? GRAY : PRIMARY} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.createBtn}
+            onPress={() => router.push('/post/create')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={18} color="#FFF" />
+            <Text style={s.createBtnText}>Пост</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.catScroll}
-        contentContainerStyle={s.catRow}
-      >
-        {CATEGORIES.map((cat) => {
-          const active = cat.key === activeCategory;
-          return (
-            <TouchableOpacity
-              key={cat.key}
-              style={[s.catChip, active && s.catChipActive]}
-              onPress={() => setActiveCategory(cat.key)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.catChipText, active && s.catChipTextActive]}>
-                {cat.emoji} {cat.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {loading && posts.length === 0 ? (
-        <ActivityIndicator color={PRIMARY} style={{ marginTop: 40 }} />
-      ) : posts.length === 0 ? (
-        <View style={s.emptyCard}>
-          <Text style={s.emptyText}>Здесь пока пусто</Text>
-          <Text style={s.emptyHint}>
-            {activeCategory === 'all'
-              ? 'Стань первым — поделись рецептом или лайфхаком.'
-              : 'В этой категории пока нет постов.'}
-          </Text>
-        </View>
-      ) : (
+      {/* ── fixed-height category row ── */}
+      <View style={s.catWrapper}>
         <ScrollView
-          contentContainerStyle={s.feed}
-          showsVerticalScrollIndicator={false}
-          refreshing={refreshing}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.catRow}
         >
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} onLike={() => handleLike(post)} />
-          ))}
-          <View style={{ height: 24 }} />
+          {CATEGORIES.map((cat) => {
+            const active = cat.key === activeCategory;
+            const chipBg = active ? cat.color : `${cat.color}14`;
+            const chipBorder = active ? cat.color : `${cat.color}50`;
+            const chipTextColor = active ? '#FFF' : cat.color;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[s.catChip, { backgroundColor: chipBg, borderColor: chipBorder }]}
+                onPress={() => setActiveCategory(cat.key)}
+                activeOpacity={0.8}
+              >
+                {cat.icon ? (
+                  <Ionicons name={cat.icon as any} size={11} color={chipTextColor} />
+                ) : null}
+                <Text style={[s.catChipText, { color: chipTextColor }]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
-      )}
+      </View>
+
+      {/* ── feed: fills remaining space, top-aligned ── */}
+      <View style={s.feedWrapper}>
+        {loading && posts.length === 0 ? (
+          <ActivityIndicator color={PRIMARY} style={{ marginTop: 40 }} />
+        ) : posts.length === 0 ? (
+          <View style={s.emptyCard}>
+            <Text style={s.emptyText}>Здесь пока пусто</Text>
+            <Text style={s.emptyHint}>
+              {activeCategory === 'all'
+                ? 'Стань первым — поделись рецептом или лайфхаком.'
+                : 'В этой категории пока нет постов.'}
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={s.feedScroll}
+            contentContainerStyle={s.feed}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={() => fetchPosts(activeCategory, true)}
+          >
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} onLike={() => handleLike(post)} />
+            ))}
+            <View style={{ height: 24 }} />
+          </ScrollView>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -176,8 +204,9 @@ function PostCard({ post, onLike }: { post: TrayPost; onLike: () => void }) {
 
       <View style={s.cardBody}>
         <View style={[s.catBadge, { backgroundColor: `${meta.color}15`, borderColor: `${meta.color}40` }]}>
+          <Ionicons name={meta.icon as any} size={10} color={meta.color} />
           <Text style={[s.catBadgeText, { color: meta.color }]}>
-            {meta.emoji} {meta.label}
+            {meta.label}
           </Text>
         </View>
 
@@ -222,13 +251,15 @@ function PostCard({ post, onLike }: { post: TrayPost; onLike: () => void }) {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
+
+  // ── header ──────────────────────────────────────────
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   title: {
     fontSize: 22,
@@ -236,6 +267,21 @@ const s = StyleSheet.create({
     color: BLACK,
     fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
     letterSpacing: -0.44,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: CARD,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   createBtn: {
     backgroundColor: PRIMARY,
@@ -247,20 +293,38 @@ const s = StyleSheet.create({
     gap: 4,
   },
   createBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
-  catScroll: { maxHeight: 50, marginTop: 4 },
-  catRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 8 },
+
+  // ── category row ─────────────────────────────────────
+  // Fixed height so the row never shifts when category changes
+  catWrapper: {
+    height: 52,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    justifyContent: 'center',
+  },
+  catRow: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: 'center',
+  },
   catChip: {
-    backgroundColor: CARD,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   catChipActive: { backgroundColor: PRIMARY, borderColor: PRIMARY },
   catChipText: { color: GRAY, fontSize: 12, fontWeight: '700', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   catChipTextActive: { color: '#FFF' },
-  feed: { paddingHorizontal: 16, paddingTop: 8, gap: 12 },
+
+  // ── feed area ─────────────────────────────────────────
+  // flex:1 takes all remaining vertical space; content is always top-aligned
+  feedWrapper: { flex: 1 },
+  feedScroll: { flex: 1 },
+  feed: { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
   card: {
     backgroundColor: CARD,
     borderRadius: 14,
@@ -276,6 +340,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   catBadgeText: { fontSize: 11, fontWeight: '800', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   cardTitle: {

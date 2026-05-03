@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useRef } from 'react';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { agentApi } from '@/api/agent';
 import { usePlanStore } from '@/store/planStore';
 
@@ -28,22 +29,22 @@ type Message = {
 };
 
 const QUICK_ACTIONS = [
-  { id: 'pizza', label: '🍕 Съел не по плану', message: 'Я съел пиццу (2 куска, ~600 ккал). Перестрой остаток дня.' },
-  { id: 'today', label: '📋 Что у меня сегодня?', message: 'Покажи мой план питания на сегодня.' },
-  { id: 'expiring', label: '⏰ Что скоро испортится?', message: 'Что у меня скоро испортится?' },
-  { id: 'simplify', label: '🔄 Упрости меню', message: 'Упрости моё меню — хочу что-то попроще на этой неделе.' },
+  { id: 'pizza',    icon: 'restaurant-outline', label: 'Съел не по плану',   message: 'Я съел пиццу (2 куска, ~600 ккал). Перестрой остаток дня.' },
+  { id: 'today',    icon: 'list-outline',        label: 'Что у меня сегодня?', message: 'Покажи мой план питания на сегодня.' },
+  { id: 'expiring', icon: 'time-outline',         label: 'Что скоро испортится?', message: 'Что у меня скоро испортится?' },
+  { id: 'simplify', icon: 'refresh-outline',      label: 'Упрости меню',       message: 'Упрости моё меню — хочу что-то попроще на этой неделе.' },
 ];
 
 const WELCOME_MSG: Message = {
   id: 'welcome',
   role: 'assistant',
-  text: 'Привет! Я твой персональный нутрициолог 🥗\n\nМогу помочь с планом, объяснить что и когда есть, и скорректировать рацион если что-то пошло не так.\n\nЧто хочешь узнать?',
+  text: 'Твой персональный нутрициолог.\n\nМогу помочь с планом, объяснить что и когда есть, и скорректировать рацион если что-то пошло не так.',
 };
 
 const ONBOARDING_MSG: Message = {
   id: 'onboarding',
   role: 'assistant',
-  text: 'Привет! 👋 Я — КБЖУЙ, твой нутрициолог.\n\nЯ составлю план питания на неделю, посчитаю КБЖУ под твои цели и скажу что и когда готовить.\n\nС чего начнём?',
+  text: 'Я — КБЖУЙ. Составлю план питания на неделю, посчитаю КБЖУ под твои цели и скажу что и когда готовить.\n\nС чего начнём?',
 };
 
 export default function AgentScreen() {
@@ -109,7 +110,7 @@ export default function AgentScreen() {
         {/* Header */}
         <View style={s.header}>
           <View style={s.headerIcon}>
-            <Text style={s.headerIconText}>🤖</Text>
+            <Ionicons name="locate-outline" size={20} color={PRIMARY} />
           </View>
           <View>
             <Text style={s.headerTitle}>Агент КБЖУЙ</Text>
@@ -129,7 +130,7 @@ export default function AgentScreen() {
             <View key={msg.id} style={[s.bubble, msg.role === 'user' ? s.bubbleUser : s.bubbleAssistant]}>
               {msg.role === 'assistant' && (
                 <View style={s.botAvatar}>
-                  <Text style={s.botAvatarText}>🤖</Text>
+                  <Ionicons name="locate-outline" size={14} color={PRIMARY} />
                 </View>
               )}
               <View style={[s.bubbleContent, msg.role === 'user' ? s.bubbleContentUser : s.bubbleContentAssistant]}>
@@ -161,12 +162,14 @@ export default function AgentScreen() {
                 onPress={() => handleOnboardingAction('plan')}
                 activeOpacity={0.85}
               >
-                <Text style={s.onboardingCardEmoji}>📋</Text>
+                <View style={s.onboardingCardIcon}>
+                  <Ionicons name="calendar-outline" size={20} color={PRIMARY} />
+                </View>
                 <View style={s.onboardingCardBody}>
                   <Text style={s.onboardingCardTitle}>Создать план питания</Text>
                   <Text style={s.onboardingCardHint}>Меню на неделю, список покупок и план готовки</Text>
                 </View>
-                <Text style={s.onboardingCardArrow}>→</Text>
+                <Ionicons name="chevron-forward" size={16} color={GRAY} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -174,12 +177,14 @@ export default function AgentScreen() {
                 onPress={() => handleOnboardingAction('storage')}
                 activeOpacity={0.85}
               >
-                <Text style={s.onboardingCardEmoji}>📦</Text>
+                <View style={s.onboardingCardIcon}>
+                  <Ionicons name="archive-outline" size={20} color={PRIMARY} />
+                </View>
                 <View style={s.onboardingCardBody}>
                   <Text style={s.onboardingCardTitle}>Добавить продукты</Text>
-                  <Text style={s.onboardingCardHint}>Сначала укажу что уже есть дома</Text>
+                  <Text style={s.onboardingCardHint}>Укажи что уже есть дома</Text>
                 </View>
-                <Text style={s.onboardingCardArrow}>→</Text>
+                <Ionicons name="chevron-forward" size={16} color={GRAY} />
               </TouchableOpacity>
             </View>
           )}
@@ -190,6 +195,7 @@ export default function AgentScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.quickScroll} contentContainerStyle={s.quickRow}>
             {QUICK_ACTIONS.map((qa) => (
               <TouchableOpacity key={qa.id} style={s.quickChip} onPress={() => sendMessage(qa.message)} activeOpacity={0.7}>
+                <Ionicons name={qa.icon as any} size={12} color={PRIMARY} />
                 <Text style={s.quickChipText}>{qa.label}</Text>
               </TouchableOpacity>
             ))}
@@ -244,12 +250,11 @@ const s = StyleSheet.create({
   headerIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 10,
     backgroundColor: '#E8E4D9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerIconText: { fontSize: 20, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   headerTitle: { fontSize: 15, fontWeight: '700', color: BLACK, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3 },
   headerSub: { fontSize: 11, color: GRAY, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   onlineDot: {
@@ -270,12 +275,11 @@ const s = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#E8E4D9',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  botAvatarText: { fontSize: 14, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   bubbleContent: { maxWidth: '80%', borderRadius: 16, padding: 12 },
   bubbleContentUser: {
     backgroundColor: PRIMARY,
@@ -299,7 +303,7 @@ const s = StyleSheet.create({
   },
 
   // Onboarding action cards
-  onboardingCards: { gap: 10, marginTop: 4, marginLeft: 38 },
+  onboardingCards: { gap: 8, marginTop: 4, marginLeft: 38 },
   onboardingCard: {
     backgroundColor: CARD,
     borderRadius: 14,
@@ -310,21 +314,30 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  onboardingCardEmoji: { fontSize: 28 },
+  onboardingCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#E8E4D9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   onboardingCardBody: { flex: 1 },
   onboardingCardTitle: { fontSize: 15, fontWeight: '800', color: BLACK, marginBottom: 3, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.3 },
   onboardingCardHint: { fontSize: 12, color: GRAY, lineHeight: 17, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
-  onboardingCardArrow: { fontSize: 18, color: PRIMARY, fontWeight: '700' },
 
   quickScroll: { maxHeight: 52 },
-  quickRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
+  quickRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 10, alignItems: 'center' },
   quickChip: {
     backgroundColor: CARD,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
+    borderColor: '#D4DAD5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   quickChipText: { fontSize: 12, color: PRIMARY, fontWeight: '600', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
 
@@ -339,7 +352,7 @@ const s = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F0EEE7',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 10,

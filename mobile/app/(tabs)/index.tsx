@@ -238,6 +238,12 @@ export default function HomeScreen() {
 
   const nextMealId = meals.find((meal) => meal.status === 'planned')?.id ?? null;
 
+  // Pre-plan: plan exists but today is before it starts (e.g. created on Saturday for next Monday)
+  const isPrePlan = plan !== null && today < plan.period_start;
+  const isSundayPrepDay = isPrePlan && new Date().getDay() === 0;
+  // Show pre-plan card only when no specific day is selected (default "today" view)
+  const showPrePlanCard = isPrePlan && selectedDate === null;
+
   if (loading && !plan) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -278,20 +284,26 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>{selectedDay?.date === today ? 'Сегодня' : 'План дня'}</Text>
-            <Text style={styles.date}>{selectedDay?.date === today ? todayLabel() : fullDateLabel(selectedDay?.date)}</Text>
+            <Text style={styles.title}>
+              {showPrePlanCard ? 'Сегодня' : (selectedDay?.date === today ? 'Сегодня' : 'План дня')}
+            </Text>
+            <Text style={styles.date}>
+              {showPrePlanCard ? todayLabel() : (selectedDay?.date === today ? todayLabel() : fullDateLabel(selectedDay?.date))}
+            </Text>
           </View>
-          <View style={styles.kcalPill}>
-            <Text style={styles.kcalPillValue}>{Math.round(consumed.kcal)}</Text>
-            <Text style={styles.kcalPillLabel}>из {Math.round(targets.kcal)} ккал</Text>
-          </View>
+          {!showPrePlanCard && (
+            <View style={styles.kcalPill}>
+              <Text style={styles.kcalPillValue}>{Math.round(consumed.kcal)}</Text>
+              <Text style={styles.kcalPillLabel}>из {Math.round(targets.kcal)} ккал</Text>
+            </View>
+          )}
         </View>
 
         {days.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
             {days.map((day) => {
               const label = formatDayChip(day.date);
-              const active = selectedDay?.date === day.date;
+              const active = !showPrePlanCard && selectedDay?.date === day.date;
               return (
                 <TouchableOpacity
                   key={day.id}
@@ -311,32 +323,60 @@ export default function HomeScreen() {
           </ScrollView>
         ) : null}
 
-        <View style={styles.summary}>
-          <MacroBar label="ккал" current={consumed.kcal} total={targets.kcal} color={PRIMARY} />
-          <MacroBar label="Б" current={consumed.protein} total={targets.protein} color="#4A5C4D" />
-          <MacroBar label="Ж" current={consumed.fat} total={targets.fat} color="#C9A14B" />
-          <MacroBar label="У" current={consumed.carbs} total={targets.carbs} color="#C8553D" />
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Приёмы пищи</Text>
-          <Text style={styles.sectionMeta}>{meals.length} · {formatDayMonth(selectedDay?.date)}</Text>
-        </View>
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        {!plan ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Плана пока нет</Text>
-            <Text style={styles.emptyText}>Создайте меню на вкладке «План», и здесь появится сегодняшний день.</Text>
-          </View>
-        ) : meals.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>На сегодня нет приёмов пищи</Text>
-            <Text style={styles.emptyText}>Проверьте даты текущего плана на вкладке «План».</Text>
-          </View>
+        {showPrePlanCard ? (
+          /* ── Pre-plan state: plan created but not started yet ── */
+          isSundayPrepDay ? (
+            <View style={styles.prePlanCard}>
+              <View style={styles.prePlanIconWrap}>
+                <Ionicons name="flame-outline" size={28} color={PRIMARY} />
+              </View>
+              <Text style={styles.prePlanTitle}>Сегодня день заготовки</Text>
+              <Text style={styles.prePlanHint}>
+                Приготовьте еду на неделю — завтра начинается план.
+              </Text>
+              <TouchableOpacity style={styles.prePlanBtn} onPress={() => router.push('/(tabs)/cooking')} activeOpacity={0.85}>
+                <Text style={styles.prePlanBtnText}>Перейти к готовке</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.prePlanCard}>
+              <View style={styles.prePlanIconWrap}>
+                <Ionicons name="calendar-outline" size={28} color={PRIMARY} />
+              </View>
+              <Text style={styles.prePlanTitle}>Ваш план начнётся</Text>
+              <Text style={styles.prePlanDate}>{fullDateLabel(plan.period_start)}</Text>
+              <Text style={styles.prePlanHint}>
+                Выберите день выше, чтобы посмотреть меню, или перейдите к покупкам.
+              </Text>
+              <TouchableOpacity style={styles.prePlanBtn} onPress={() => router.push('/(tabs)/shopping')} activeOpacity={0.85}>
+                <Text style={styles.prePlanBtnText}>Список покупок</Text>
+              </TouchableOpacity>
+            </View>
+          )
         ) : (
-          meals.map((meal) => {
+          /* ── Active plan: show macros + meal list ── */
+          <>
+            <View style={styles.summary}>
+              <MacroBar label="ккал" current={consumed.kcal} total={targets.kcal} color={PRIMARY} />
+              <MacroBar label="Б" current={consumed.protein} total={targets.protein} color="#4A5C4D" />
+              <MacroBar label="Ж" current={consumed.fat} total={targets.fat} color="#C9A14B" />
+              <MacroBar label="У" current={consumed.carbs} total={targets.carbs} color="#C8553D" />
+            </View>
+
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Приёмы пищи</Text>
+              <Text style={styles.sectionMeta}>{meals.length} · {formatDayMonth(selectedDay?.date)}</Text>
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            {meals.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>На этот день нет приёмов пищи</Text>
+                <Text style={styles.emptyText}>Проверьте даты текущего плана на вкладке «План».</Text>
+              </View>
+            ) : (
+              meals.map((meal) => {
             const isNext = meal.id === nextMealId;
             const isSaving = savingMealId === meal.id;
             const isSwapping = swappingMealId === meal.id;
@@ -472,6 +512,8 @@ export default function HomeScreen() {
             );
           })
         )}
+          </>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -561,6 +603,64 @@ const styles = StyleSheet.create({
   manualInput: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderColor: BORDER, backgroundColor: '#FAFAF7', paddingHorizontal: 10, color: BLACK, fontSize: 13 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
   manualSave: { minWidth: 86, borderRadius: 8, backgroundColor: PRIMARY, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   manualSaveText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"},
+  // ── Pre-plan state ─────────────────────────────────
+  prePlanCard: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  prePlanIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E8E4D9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  prePlanTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: BLACK,
+    textAlign: 'center',
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+    letterSpacing: -0.34,
+  },
+  prePlanDate: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: PRIMARY,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+    letterSpacing: -0.4,
+  },
+  prePlanHint: {
+    fontSize: 13,
+    color: GRAY,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+  },
+  prePlanBtn: {
+    backgroundColor: PRIMARY,
+    borderRadius: 12,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+  },
+  prePlanBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+  },
+  // ────────────────────────────────────────────────────
   weekCard: { marginTop: 10, backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 14 },
   weekTitle: { color: BLACK, fontSize: 16, fontWeight: '900', marginBottom: 10 , fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif", letterSpacing: -0.32},
   weekDay: { borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 8, marginTop: 8, flexDirection: 'row', gap: 10 },
