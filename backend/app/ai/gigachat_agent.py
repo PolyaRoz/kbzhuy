@@ -31,56 +31,78 @@ logger = logging.getLogger("kbzhuy.gigachat")
 
 # ── Meal display helpers ─────────────────────────────────────────────────── #
 
-MEAL_ORDER = {"breakfast": 0, "snack": 1, "lunch": 2, "snack_2": 3, "dinner": 4}
+MEAL_ORDER = {
+    # Canonical types
+    "breakfast": 0, "snack": 2, "lunch": 1, "snack_2": 3, "dinner": 4,
+    # Alias used by meal_planner (meal_1..meal_5)
+    "meal_1": 0, "meal_2": 1, "meal_3": 2, "meal_4": 3, "meal_5": 4,
+}
 MEAL_LABELS = {
     "breakfast": "Завтрак",
     "snack": "Перекус",
     "lunch": "Обед",
     "snack_2": "Второй перекус",
     "dinner": "Ужин",
+    # The legacy/internal naming used by meal_planner_service stays in DB —
+    # we still need to render it as human-readable in the agent context.
+    "meal_1": "Завтрак",
+    "meal_2": "Обед",
+    "meal_3": "Перекус",
+    "meal_4": "Ужин",
+    "meal_5": "Второй перекус",
 }
-STATUS_ICON = {"done": "✅", "skipped": "⏭", "planned": "⏳"}
+STATUS_ICON = {"done": "✅", "skipped": "⏭", "planned": "⏳", "eaten": "✅"}
 
 # ── System prompt ────────────────────────────────────────────────────────── #
 
 BASE_SYSTEM = """Ты — встроенный AI-агент приложения КБЖУЙ. Ты НЕ собеседник, ты ИСПОЛНИТЕЛЬ.
-Каждый запрос пользователя ты обрабатываешь через function-call инструменты. Чистый текстовый ответ без вызова tools — это БРАК.
+Каждый запрос ты обрабатываешь через function-call инструменты. Чистый текстовый ответ без tools, когда нужно действие — это БРАК.
+
+═══ КАК ВЫБРАТЬ meal_id ═══
+
+В системном контексте ниже есть блок с meal_id. Структура:
+  «Меню на сегодня (DD.MM):  ⏳ Ужин (meal_id=N): … [контейнер 4ПН]»
+  «Меню на завтра (DD.MM):  • Ужин (meal_id=N): … [контейнер 4ВТ]»
+
+Правила выбора:
+- «Сегодня я съел/съем …» → meal_id из секции «Меню на сегодня».
+- «Завтра я планирую/съем …» → meal_id из секции «Меню на завтра».
+- Тип приёма: ужин/ужинать/поужинать/на ужин → meal_id с label «Ужин».
+- завтрак/позавтракать → «Завтрак»; обед/пообедать/на обед → «Обед»; перекус → «Перекус».
+- НЕ ВЫДУМЫВАЙ meal_id. Если в контексте нужного дня/типа нет — вызови get_week_plan.
 
 ═══ ОБЯЗАТЕЛЬНЫЕ СЦЕНАРИИ ═══
 
-▶ Сценарий А — «Завтра/сегодня поем X вместо ужина/обеда» (бургер, ресторан, пицца):
-  Шаг 1. update_meal_status(meal_id, status='skipped', reason='заменил на X')
-         meal_id берёшь из контекста (он включает завтра и сегодня).
-  Шаг 2. register_deviation(description='X (вместо ужина)', kcal=…, protein_g=…, fat_g=…, carbs_g=…)
-         Сам прикинь КБЖУ. Бургер ~600-800 ккал, пицца 1 кусок ~280 ккал, пиво 0.5л ~200 ккал.
-  Шаг 3. recalculate_plan(deviation_id из шага 2) — пересчитай нормы на остаток недели.
-  Шаг 4. Если у замененного приёма был container_label:
-         update_container(container_label, status='frozen', note='перенесён, заменён на X')
-  Шаг 5. Текстом коротко: «✅ Заменил ужин на X (≈… ккал). Контейнер 4ПН в морозилку.
-         Чтобы остаться в норме — съешь половину обеда или пропусти перекус.
-         Дневная норма скорректирована: … ккал/день вместо … ккал/день».
+▶ А. «Завтра/сегодня съем/поужинаю X (бургер, пицца, ресторан)»:
+  1. update_meal_status(meal_id из правильного дня и типа, status='skipped', reason='заменил на X')
+  2. register_deviation(description='X (вместо ужина)', kcal, protein_g, fat_g, carbs_g)
+     Бургер ~600-800 ккал, пицца кусок ~280, пиво 0.5л ~200, ролл 8шт ~400, шаурма ~600.
+  3. recalculate_plan(deviation_id из шага 2)
+  4. Если у замененного приёма есть [контейнер X]: update_container(label, status='frozen', note='заменён на X, перенесён')
+  5. Текст: «✅ Заменил ужин на X (≈… ккал). Контейнер 4ПН в морозилку. Чтобы остаться в норме — половина обеда или пропусти перекус. Норма: … ккал/день».
 
-▶ Сценарий Б — «Съел не по плану (уже)» (съел пиццу, выпил пиво):
-  Шаг 1. register_deviation(description, kcal, protein_g, fat_g, carbs_g)
-  Шаг 2. recalculate_plan(deviation_id)
-  Шаг 3. Текст: что зарегистрировал, на сколько уменьшились нормы.
+▶ Б. «Съел/съела X (уже произошло)» — пицца, пиво, торт:
+  1. register_deviation(description, kcal, protein_g, fat_g, carbs_g)
+  2. recalculate_plan(deviation_id)
+  3. Если это заменило плановый приём (например, «ужинала бургером» = заменила ужин): шаги 1-3 из сценария А (skip + freezer контейнера) ПОСЛЕ deviation.
+  4. Текст: что зарегистрировал, на сколько уменьшились нормы.
 
-▶ Сценарий В — «Пропустил приём» (не позавтракал):
-  Шаг 1. update_meal_status(meal_id, status='skipped', reason='пропустил')
-  Шаг 2. Если был контейнер: update_container(label, status='frozen', note='пропуск')
-  Шаг 3. Текст: что отметил, куда переложил.
+▶ В. «Пропустил приём»:
+  1. update_meal_status(meal_id, status='skipped', reason='пропустил')
+  2. Если есть контейнер: update_container(label, status='frozen', note='пропуск')
+  3. Текст: что сделал.
 
-▶ Сценарий Г — Информационный («что сегодня», «что скоро испортится»):
-  → get_today_plan / get_expiring_soon / get_user_profile, потом текст.
+▶ Г. Информация («что сегодня», «что испортится», «нормы»):
+  → get_today_plan / get_expiring_soon / get_user_profile → текст.
 
 ═══ ПРАВИЛА ═══
-1. ВСЕГДА вызывай tools для действий. «Можно перенести…» в тексте без вызова — это ОШИБКА.
-2. meal_id для сегодня и завтра уже есть в контексте — НЕ нужно вызывать get_week_plan каждый раз.
-3. Tools вызывай ПОДРЯД — после первого ответа модели вызови следующий нужный tool.
-4. Никаких уточняющих вопросов вроде «Уточните во сколько». Действуй сразу — пользователь может уточнить позже.
-5. КБЖУ оценивай сам, не спрашивай у пользователя.
-6. Говори кратко и по делу: что сделал + что советую (1-2 предложения совета).
-7. Если tool вернул ошибку — объясни и НЕ вызывай его повторно с теми же аргументами."""
+1. Действие → tool. «Можно перенести…» без вызова — БРАК.
+2. ВСЕГДА читай контекст. meal_id из контекста — НЕ выдумывай.
+3. Не задавай уточняющих вопросов (время, размер). Действуй с разумным дефолтом.
+4. КБЖУ оценивай сам.
+5. Tools вызывай подряд: после результата первого вызова сразу решай нужен ли следующий.
+6. Краткий ответ: что сделал + 1-2 предложения совета. Без «как могу помочь».
+7. Tool ошибся — объясни и НЕ повторяй с теми же аргументами."""
 
 
 def _build_system(context: str) -> str:
@@ -408,18 +430,23 @@ class GigachatAgentService:
                 f"У {round(profile.target_carbs_g or 0)} г"
             )
 
-        plan = await self._get_active_plan(user_id)
-        if not plan:
+        from datetime import timedelta as _td
+
+        # Render today + tomorrow even if they live in DIFFERENT plans
+        # (week boundary case: today's plan ends, next week's plan starts tomorrow).
+        tomorrow = today + _td(days=1)
+
+        today_day = await self._get_day_plan_anywhere(user_id, today)
+        tom_day = await self._get_day_plan_anywhere(user_id, tomorrow)
+
+        if not today_day and not tom_day:
             lines.append("Активного плана нет.")
             lines.append("=== КОНЕЦ ===")
             return "\n".join(lines)
 
-        lines.append(f"Период плана: {plan.period_start} — {plan.period_end}")
-
-        day = await self._get_today_day(plan, today)
-        if day and day.meals:
+        if today_day:
             lines.append(f"Меню на сегодня ({today.strftime('%d.%m')}):")
-            for meal in sorted(day.meals, key=lambda m: MEAL_ORDER.get(m.meal_type, 9)):
+            for meal in sorted(today_day.meals, key=lambda m: MEAL_ORDER.get(m.meal_type, 9)):
                 icon = STATUS_ICON.get(meal.status, "•")
                 label = MEAL_LABELS.get(meal.meal_type, meal.meal_type)
                 kcal = (
@@ -433,10 +460,7 @@ class GigachatAgentService:
         else:
             lines.append("Меню на сегодня не расписано.")
 
-        # Tomorrow's plan (helps "завтра ужин в ресторане" scenarios)
-        tomorrow = today + __import__("datetime").timedelta(days=1)
-        tom_day = await self._get_today_day(plan, tomorrow)
-        if tom_day and tom_day.meals:
+        if tom_day:
             lines.append(f"Меню на завтра ({tomorrow.strftime('%d.%m')}):")
             for meal in sorted(tom_day.meals, key=lambda m: MEAL_ORDER.get(m.meal_type, 9)):
                 label = MEAL_LABELS.get(meal.meal_type, meal.meal_type)
@@ -456,14 +480,19 @@ class GigachatAgentService:
         return r.scalar_one_or_none()
 
     async def _get_active_plan(self, user_id: int) -> MealPlan | None:
+        # The DB allows multiple plans per user/period (cancelled + active).
+        # Filter by status and take the most recent — never use scalar_one_or_none here.
         today = date.today()
         r = await self.session.execute(
             select(MealPlan)
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        return r.scalar_one_or_none()
+        return r.scalars().first()
 
     async def _get_today_day(self, plan: MealPlan, day_date: date) -> DayPlan | None:
         from app.models.plan import Meal
@@ -474,3 +503,22 @@ class GigachatAgentService:
             .options(selectinload(DayPlan.meals).selectinload(Meal.container))
         )
         return r.scalar_one_or_none()
+
+    async def _get_day_plan_anywhere(self, user_id: int, day_date: date) -> DayPlan | None:
+        """
+        Find a day plan for a specific date across ALL of the user's active plans.
+        Handles week-boundary cases where today's date lives in plan A and tomorrow
+        lives in plan B (the next week).
+        """
+        from app.models.plan import Meal
+        r = await self.session.execute(
+            select(DayPlan)
+            .join(MealPlan, DayPlan.plan_id == MealPlan.id)
+            .where(MealPlan.user_id == user_id)
+            .where(MealPlan.status == "active")
+            .where(DayPlan.date == day_date)
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
+            .options(selectinload(DayPlan.meals).selectinload(Meal.container))
+        )
+        return r.scalars().first()

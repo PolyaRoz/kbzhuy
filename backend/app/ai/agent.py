@@ -267,8 +267,11 @@ class AgentService:
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        plan = result.scalar_one_or_none()
+        plan = result.scalars().first()
         if not plan:
             return {"error": "no active plan"}
 
@@ -306,8 +309,11 @@ class AgentService:
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        plan = result.scalar_one_or_none()
+        plan = result.scalars().first()
         if not plan:
             return {"error": "no active plan"}
 
@@ -393,12 +399,16 @@ class AgentService:
         if not label:
             return {"error": "container_label required"}
 
+        # Containers from old/cancelled plans share labels with current ones —
+        # always pick the most recent one for this user.
         result = await self.session.execute(
             select(Container)
             .where(Container.user_id == user_id)
             .where(Container.label == label)
+            .order_by(Container.created_at.desc())
+            .limit(1)
         )
-        container = result.scalar_one_or_none()
+        container = result.scalars().first()
         if not container:
             return {"error": f"container '{label}' not found"}
 
@@ -427,8 +437,11 @@ class AgentService:
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        plan = result.scalar_one_or_none()
+        plan = result.scalars().first()
         if not plan:
             return {"containers": []}
 
@@ -525,8 +538,11 @@ class AgentService:
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        plan = result.scalar_one_or_none()
+        plan = result.scalars().first()
         if not plan:
             return {"expiring": []}
 

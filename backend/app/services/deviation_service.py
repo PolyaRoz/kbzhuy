@@ -57,8 +57,11 @@ class DeviationService:
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_planned(self, user_id: int) -> list[Deviation]:
         result = await self.session.execute(

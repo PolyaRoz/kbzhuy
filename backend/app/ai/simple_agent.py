@@ -410,8 +410,11 @@ class SimpleAgentService:
             .where(MealPlan.user_id == user_id)
             .where(MealPlan.period_start <= today)
             .where(MealPlan.period_end >= today)
+            .where(MealPlan.status == "active")
+            .order_by(MealPlan.created_at.desc())
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def _get_day(
         self, user_id: int, day_date: date
