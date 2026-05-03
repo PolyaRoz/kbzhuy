@@ -18,6 +18,8 @@ export interface TrayPost {
   like_count: number;
   comment_count: number;
   liked_by_me: boolean;
+  /** true when the user queued this recipe for their next meal plan */
+  queued_for_plan: boolean;
 }
 
 export interface TrayComment {
@@ -51,6 +53,11 @@ export const trayApi = {
   toggleLike: (postId: number) =>
     apiClient
       .post<{ liked: boolean; like_count: number }>(`/tray/posts/${postId}/like`)
+      .then((r) => r.data),
+
+  togglePlanRequest: (postId: number) =>
+    apiClient
+      .post<{ queued: boolean; title: string }>(`/tray/posts/${postId}/plan-request`)
       .then((r) => r.data),
 
   listComments: (postId: number) =>

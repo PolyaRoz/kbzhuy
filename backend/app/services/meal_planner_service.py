@@ -26,6 +26,7 @@ from app.models.container import Container
 from app.models.cooking import CookingPlan
 from app.models.shopping import ShoppingList, ShoppingItem
 from app.models.profile import Profile
+from app.models.post import PlanRecipeRequest
 from app.models.storage import InventoryItem
 from app.services.nutri_service import calculate_targets, Goal, ActivityLevel, NutriTarget
 
@@ -645,6 +646,16 @@ class MealPlannerService:
         meal_schedule = self._profile_meal_schedule(profile)
         used_week_names: dict[str, int] = {}
 
+        # Load titles the user queued from the Tray feed ("add to plan" button).
+        # These get a score boost in the beam search so they appear in the week.
+        pending_requests_result = await self.session.execute(
+            select(PlanRecipeRequest)
+            .where(PlanRecipeRequest.user_id == user_id)
+            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+        )
+        pending_requests = pending_requests_result.scalars().all()
+        preferred_names: set[str] = {req.title.casefold() for req in pending_requests}
+
         for day_offset in range(7):
             day_date = week_start + timedelta(days=day_offset)
             day_plan = DayPlan(
@@ -654,7 +665,9 @@ class MealPlannerService:
             self.session.add(day_plan)
             await self.session.flush()
 
-            day_meals = self._compose_day_meals(meal_schedule, targets, profile, used_week_names)
+            day_meals = self._compose_day_meals(
+                meal_schedule, targets, profile, used_week_names, preferred_names=preferred_names
+            )
             for scheduled_meal, recipe in day_meals:
                 container = Container(
                     user_id=user_id,
@@ -681,6 +694,17 @@ class MealPlannerService:
         await self._sync_shopping_list(plan.id, user_id, week_start)
 
         await self.session.commit()
+
+        # Mark all pending plan-recipe requests as consumed by this plan
+        if pending_requests:
+            pending_ids = [req.id for req in pending_requests]
+            await self.session.execute(
+                update(PlanRecipeRequest)
+                .where(PlanRecipeRequest.id.in_(pending_ids))
+                .values(used_in_plan_id=plan.id)
+            )
+            await self.session.commit()
+
         await self.session.refresh(plan)
         return plan
 
@@ -1042,6 +1066,15 @@ class MealPlannerService:
             return False
         return True
 
+    @staticmethod
+    def _is_preferred(name: str, preferred_names: set[str]) -> bool:
+        """Loose match: post title ⊆ recipe name or recipe name ⊆ post title."""
+        name_lower = name.casefold()
+        return any(
+            pref in name_lower or name_lower in pref
+            for pref in preferred_names
+        )
+
     def _compose_day_meals(
         self,
         meal_schedule: list[dict],
@@ -1050,6 +1083,7 @@ class MealPlannerService:
         used_week_names: dict[str, int],
         exclude_names: set[str] | None = None,
         diversity_boost: bool = False,
+        preferred_names: set[str] | None = None,
     ) -> list[tuple[dict, dict]]:
         if not meal_schedule:
             return []
@@ -1090,7 +1124,16 @@ class MealPlannerService:
                         used_week_names.get(name, 0),
                         diversity_boost=diversity_boost,
                     )
-                    score = self._score_totals(next_totals, partial_target) + duplicate_penalty + week_penalty + _random_tiebreak()
+                    # Strong negative bonus for recipes the user explicitly requested
+                    # (applies only on first use; subsequent days rely on natural КБЖУ fit)
+                    preferred_boost = (
+                        -2.0
+                        if preferred_names
+                        and used_week_names.get(name, 0) == 0
+                        and self._is_preferred(name, preferred_names)
+                        else 0.0
+                    )
+                    score = self._score_totals(next_totals, partial_target) + duplicate_penalty + week_penalty + preferred_boost + _random_tiebreak()
                     next_beams.append((
                         [*selected, (scheduled_meal, self._recipe_payload(recipe))],
                         next_totals,

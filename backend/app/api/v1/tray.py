@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.user import User
-from app.models.post import Post, PostComment, PostLike
+from app.models.post import Post, PostComment, PostLike, PlanRecipeRequest
 
 router = APIRouter()
 
@@ -41,7 +41,13 @@ def _user_label(user: User | None) -> dict:
     return {"id": user.id, "name": name}
 
 
-def _serialize_post(post: Post, like_count: int, comment_count: int, liked_by_me: bool) -> dict:
+def _serialize_post(
+    post: Post,
+    like_count: int,
+    comment_count: int,
+    liked_by_me: bool,
+    queued_for_plan: bool = False,
+) -> dict:
     return {
         "id": post.id,
         "category": post.category,
@@ -53,6 +59,7 @@ def _serialize_post(post: Post, like_count: int, comment_count: int, liked_by_me
         "like_count": like_count,
         "comment_count": comment_count,
         "liked_by_me": liked_by_me,
+        "queued_for_plan": queued_for_plan,
     }
 
 
@@ -111,6 +118,17 @@ async def list_posts(
     ).all()
     my_likes = {row[0] for row in my_likes_rows}
 
+    # Pending plan-queue status (NULL used_in_plan_id = still queued)
+    my_queued_rows = (
+        await db.execute(
+            select(PlanRecipeRequest.post_id)
+            .where(PlanRecipeRequest.post_id.in_(post_ids))
+            .where(PlanRecipeRequest.user_id == user_id)
+            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+        )
+    ).all()
+    my_queued = {row[0] for row in my_queued_rows}
+
     return {
         "items": [
             _serialize_post(
@@ -118,6 +136,7 @@ async def list_posts(
                 like_count=like_counts.get(p.id, 0),
                 comment_count=comment_counts.get(p.id, 0),
                 liked_by_me=p.id in my_likes,
+                queued_for_plan=p.id in my_queued,
             )
             for p in posts
         ]
@@ -167,8 +186,22 @@ async def get_post(
             select(PostLike.id).where(PostLike.post_id == post_id).where(PostLike.user_id == user_id)
         )
     ).first() is not None
+    queued_for_plan = (
+        await db.execute(
+            select(PlanRecipeRequest.id)
+            .where(PlanRecipeRequest.post_id == post_id)
+            .where(PlanRecipeRequest.user_id == user_id)
+            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+        )
+    ).first() is not None
 
-    return _serialize_post(post, like_count=like_count, comment_count=comment_count, liked_by_me=liked_by_me)
+    return _serialize_post(
+        post,
+        like_count=like_count,
+        comment_count=comment_count,
+        liked_by_me=liked_by_me,
+        queued_for_plan=queued_for_plan,
+    )
 
 
 @router.delete("/posts/{post_id}")
@@ -216,6 +249,50 @@ async def toggle_like(
     await db.commit()
     like_count = (await db.execute(select(func.count(PostLike.id)).where(PostLike.post_id == post_id))).scalar() or 0
     return {"liked": liked, "like_count": like_count}
+
+
+# ----- Plan-queue -----
+
+
+@router.post("/posts/{post_id}/plan-request")
+async def toggle_plan_request(
+    post_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle whether a recipe post is queued for the next generated meal plan.
+
+    Only posts with category='recipe' can be queued.
+    Returns {"queued": bool, "title": str}.
+    """
+    post = (
+        await db.execute(
+            select(Post).where(Post.id == post_id)
+        )
+    ).scalar_one_or_none()
+    if post is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.category != "recipe":
+        raise HTTPException(status_code=400, detail="Only recipe posts can be added to a plan")
+
+    existing = (
+        await db.execute(
+            select(PlanRecipeRequest)
+            .where(PlanRecipeRequest.post_id == post_id)
+            .where(PlanRecipeRequest.user_id == user_id)
+            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        await db.delete(existing)
+        queued = False
+    else:
+        db.add(PlanRecipeRequest(user_id=user_id, post_id=post_id, title=post.title.strip()))
+        queued = True
+
+    await db.commit()
+    return {"queued": queued, "title": post.title}
 
 
 # ----- Comments -----

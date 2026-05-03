@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, DateTime, func, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, Text, DateTime, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -46,3 +46,20 @@ class PostLike(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     post: Mapped["Post"] = relationship(back_populates="likes")
+
+
+class PlanRecipeRequest(Base):
+    """Recipe post queued by user to appear in their next generated meal plan."""
+
+    __tablename__ = "tray_plan_requests"
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_plan_recipe_request"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("tray_posts.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Set to the plan's id after the request is consumed during plan generation
+    used_in_plan_id: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+
+    post: Mapped["Post"] = relationship()

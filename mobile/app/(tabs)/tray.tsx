@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   ScrollView,
   StyleSheet,
@@ -77,6 +78,28 @@ export default function TrayScreen() {
       void fetchPosts(activeCategory, true);
     }, [activeCategory, fetchPosts]),
   );
+
+  const handlePlanRequest = async (post: TrayPost) => {
+    // Optimistic update
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id ? { ...p, queued_for_plan: !p.queued_for_plan } : p,
+      ),
+    );
+    try {
+      const res = await trayApi.togglePlanRequest(post.id);
+      setPosts((prev) =>
+        prev.map((p) => (p.id === post.id ? { ...p, queued_for_plan: res.queued } : p)),
+      );
+    } catch {
+      // Revert on error
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === post.id ? { ...p, queued_for_plan: post.queued_for_plan } : p,
+        ),
+      );
+    }
+  };
 
   const handleLike = async (post: TrayPost) => {
     // Optimistic update
@@ -182,7 +205,12 @@ export default function TrayScreen() {
             onRefresh={() => fetchPosts(activeCategory, true)}
           >
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} onLike={() => handleLike(post)} />
+              <PostCard
+                key={post.id}
+                post={post}
+                onLike={() => handleLike(post)}
+                onPlanRequest={() => handlePlanRequest(post)}
+              />
             ))}
             <View style={{ height: 24 }} />
           </ScrollView>
@@ -192,7 +220,52 @@ export default function TrayScreen() {
   );
 }
 
-function PostCard({ post, onLike }: { post: TrayPost; onLike: () => void }) {
+const PLAN_GREEN = '#2D6A4F';
+
+function PlanRequestButton({ queued, onPress }: { queued: boolean; onPress: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.82, duration: 80, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[s.planBtn, queued && s.planBtnActive]}
+        onPress={(e) => {
+          e.stopPropagation();
+          handlePress();
+        }}
+        activeOpacity={0.8}
+        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+      >
+        <Ionicons
+          name={queued ? 'calendar' : 'calendar-outline'}
+          size={14}
+          color={queued ? '#fff' : PLAN_GREEN}
+        />
+        <Text style={[s.planBtnText, queued && s.planBtnTextActive]}>
+          {queued ? 'В плане' : 'В план'}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+function PostCard({
+  post,
+  onLike,
+  onPlanRequest,
+}: {
+  post: TrayPost;
+  onLike: () => void;
+  onPlanRequest: () => void;
+}) {
   const meta = CATEGORY_META[post.category];
   const goToPost = () => router.push(`/post/${post.id}`);
 
@@ -203,11 +276,18 @@ function PostCard({ post, onLike }: { post: TrayPost; onLike: () => void }) {
       ) : null}
 
       <View style={s.cardBody}>
-        <View style={[s.catBadge, { backgroundColor: `${meta.color}15`, borderColor: `${meta.color}40` }]}>
-          <Ionicons name={meta.icon as any} size={10} color={meta.color} />
-          <Text style={[s.catBadgeText, { color: meta.color }]}>
-            {meta.label}
-          </Text>
+        <View style={s.cardBadgeRow}>
+          <View style={[s.catBadge, { backgroundColor: `${meta.color}15`, borderColor: `${meta.color}40` }]}>
+            <Ionicons name={meta.icon as any} size={10} color={meta.color} />
+            <Text style={[s.catBadgeText, { color: meta.color }]}>
+              {meta.label}
+            </Text>
+          </View>
+
+          {/* "В план" button — only for recipe posts */}
+          {post.category === 'recipe' && (
+            <PlanRequestButton queued={post.queued_for_plan} onPress={onPlanRequest} />
+          )}
         </View>
 
         <Text style={s.cardTitle} numberOfLines={2}>
@@ -334,6 +414,11 @@ const s = StyleSheet.create({
   },
   cardImage: { width: '100%', height: 180, backgroundColor: '#F0EEE7' },
   cardBody: { padding: 14, gap: 8 },
+  cardBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   catBadge: {
     alignSelf: 'flex-start',
     borderRadius: 8,
@@ -343,6 +428,30 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  planBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PLAN_GREEN,
+    backgroundColor: 'transparent',
+  },
+  planBtnActive: {
+    backgroundColor: PLAN_GREEN,
+    borderColor: PLAN_GREEN,
+  },
+  planBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: PLAN_GREEN,
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+  },
+  planBtnTextActive: {
+    color: '#fff',
   },
   catBadgeText: { fontSize: 11, fontWeight: '800', fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   cardTitle: {
