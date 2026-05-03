@@ -96,6 +96,72 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "get_week_plan",
+        "description": (
+            "Get the full active week plan with all days and meals (including meal IDs). "
+            "Use this when you need to find a specific meal to modify/move/skip. "
+            "Returns days with their meal_id, date, meal_type, status, container_label, kcal."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "update_meal_status",
+        "description": (
+            "Mark a specific meal as eaten / skipped / planned. "
+            "Use 'skipped' when the user won't eat this meal (e.g. dining out, planned skip, missed). "
+            "Use 'eaten' when the user confirms they ate it. "
+            "ALWAYS pair with register_deviation if the user ate something else instead, "
+            "and with update_container to move the prepared food to freezer if skipped."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "meal_id": {"type": "integer", "description": "Meal ID from get_today_plan / get_week_plan"},
+                "status": {
+                    "type": "string",
+                    "enum": ["eaten", "skipped", "planned"],
+                    "description": "New status",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Short reason (e.g. 'ужин в ресторане', 'пропустил')",
+                },
+            },
+            "required": ["meal_id", "status"],
+        },
+    },
+    {
+        "name": "update_container",
+        "description": (
+            "Update a container's status / location / note. "
+            "Use to move prepared food to the freezer when a meal is skipped (status='frozen'), "
+            "to mark a container as eaten (status='eaten'), or to add a note about handling."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "container_label": {
+                    "type": "string",
+                    "description": "Container label like '1А', '2Б' (from the plan)",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["filled", "eaten", "expired", "frozen"],
+                    "description": "New status. 'frozen' = moved to freezer to extend shelf life.",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional note to append to the container description",
+                },
+            },
+            "required": ["container_label"],
+        },
+    },
+    {
         "name": "build_meal_plan",
         "description": (
             "Generate and save a 7-day meal plan for the user based on their profile. "

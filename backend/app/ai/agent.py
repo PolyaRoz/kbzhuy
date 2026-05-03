@@ -223,6 +223,12 @@ class AgentService:
             return await self._recalculate_plan(user_id, tool_input)
         if tool_name == "get_expiring_soon":
             return await self._get_expiring_soon(user_id)
+        if tool_name == "get_week_plan":
+            return await self._get_week_plan(user_id)
+        if tool_name == "update_meal_status":
+            return await self._update_meal_status(user_id, tool_input)
+        if tool_name == "update_container":
+            return await self._update_container(user_id, tool_input)
         if tool_name == "build_meal_plan":
             return await self._build_meal_plan(user_id, tool_input)
         return {"error": f"unknown tool: {tool_name}"}
@@ -270,7 +276,7 @@ class AgentService:
             select(DayPlan)
             .where(DayPlan.plan_id == plan.id)
             .where(DayPlan.date == today)
-            .options(selectinload(DayPlan.meals))
+            .options(selectinload(DayPlan.meals).selectinload(Meal.container))
         )
         day = day_result.scalar_one_or_none()
         if not day:
@@ -281,13 +287,137 @@ class AgentService:
             "daily_targets": plan.daily_targets,
             "meals": [
                 {
+                    "meal_id": m.id,
                     "meal_type": m.meal_type,
                     "status": m.status,
                     "kbzhu": m.kbzhu_actual,
                     "container_id": m.container_id,
+                    "container_label": m.container.label if m.container else None,
                 }
                 for m in day.meals
             ],
+        }
+
+    async def _get_week_plan(self, user_id: int) -> dict:
+        """Full active plan with all days/meals + IDs — for the agent to pick what to modify."""
+        today = date.today()
+        result = await self.session.execute(
+            select(MealPlan)
+            .where(MealPlan.user_id == user_id)
+            .where(MealPlan.period_start <= today)
+            .where(MealPlan.period_end >= today)
+        )
+        plan = result.scalar_one_or_none()
+        if not plan:
+            return {"error": "no active plan"}
+
+        days_result = await self.session.execute(
+            select(DayPlan)
+            .where(DayPlan.plan_id == plan.id)
+            .where(DayPlan.date >= today)
+            .order_by(DayPlan.date)
+            .options(selectinload(DayPlan.meals).selectinload(Meal.container))
+        )
+        days = days_result.scalars().all()
+
+        return {
+            "plan_id": plan.id,
+            "period_start": str(plan.period_start),
+            "period_end": str(plan.period_end),
+            "daily_targets": plan.daily_targets,
+            "days": [
+                {
+                    "date": str(d.date),
+                    "notes": d.notes,
+                    "meals": [
+                        {
+                            "meal_id": m.id,
+                            "meal_type": m.meal_type,
+                            "status": m.status,
+                            "kcal": (m.kbzhu_actual or {}).get("kcal"),
+                            "container_label": m.container.label if m.container else None,
+                        }
+                        for m in d.meals
+                    ],
+                }
+                for d in days
+            ],
+        }
+
+    async def _update_meal_status(self, user_id: int, inp: dict) -> dict:
+        """Mark a meal as eaten/skipped/planned. Verifies meal belongs to the user."""
+        meal_id = inp.get("meal_id")
+        new_status = inp.get("status")
+        reason = inp.get("reason") or ""
+        if not meal_id or new_status not in ("eaten", "skipped", "planned"):
+            return {"error": "meal_id and valid status required"}
+
+        # Join Meal → DayPlan → MealPlan to check ownership
+        result = await self.session.execute(
+            select(Meal, DayPlan, MealPlan)
+            .join(DayPlan, Meal.day_id == DayPlan.id)
+            .join(MealPlan, DayPlan.plan_id == MealPlan.id)
+            .where(Meal.id == meal_id)
+            .where(MealPlan.user_id == user_id)
+        )
+        row = result.first()
+        if not row:
+            return {"error": f"meal {meal_id} not found for this user"}
+
+        meal, day, _plan = row
+        old_status = meal.status
+        meal.status = new_status
+        self.session.add(meal)
+
+        if reason:
+            note = f"{meal.meal_type} → {new_status}: {reason}"
+            day.notes = f"{day.notes} | {note}" if day.notes else note
+            self.session.add(day)
+
+        await self.session.commit()
+        return {
+            "meal_id": meal.id,
+            "meal_type": meal.meal_type,
+            "date": str(day.date),
+            "old_status": old_status,
+            "new_status": new_status,
+            "reason": reason,
+            "ok": True,
+        }
+
+    async def _update_container(self, user_id: int, inp: dict) -> dict:
+        """Update container status (filled/eaten/expired/frozen) and/or append a note."""
+        label = inp.get("container_label")
+        new_status = inp.get("status")
+        note = inp.get("note")
+        if not label:
+            return {"error": "container_label required"}
+
+        result = await self.session.execute(
+            select(Container)
+            .where(Container.user_id == user_id)
+            .where(Container.label == label)
+        )
+        container = result.scalar_one_or_none()
+        if not container:
+            return {"error": f"container '{label}' not found"}
+
+        old_status = container.status
+        if new_status:
+            container.status = new_status
+        if note:
+            existing = container.contents_description or ""
+            container.contents_description = (
+                f"{existing} | {note}".strip(" |") if existing else note
+            )
+        self.session.add(container)
+        await self.session.commit()
+        return {
+            "label": container.label,
+            "old_status": old_status,
+            "new_status": container.status,
+            "description": container.contents_description,
+            "ok": True,
         }
 
     async def _get_storage(self, user_id: int) -> dict:

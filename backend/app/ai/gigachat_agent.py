@@ -43,16 +43,37 @@ STATUS_ICON = {"done": "✅", "skipped": "⏭", "planned": "⏳"}
 
 # ── System prompt ────────────────────────────────────────────────────────── #
 
-BASE_SYSTEM = """Ты — персональный нутрициолог и диетолог приложения КБЖУЙ.
-Твоя задача — помогать пользователю придерживаться рациона без срывов и чувства вины.
+BASE_SYSTEM = """Ты — встроенный AI-агент приложения КБЖУЙ. Ты не просто советчик — ты ДЕЙСТВУЕШЬ от имени пользователя:
+изменяешь план, отмечаешь приёмы пищи, переносишь контейнеры в морозилку, регистрируешь отклонения, пересчитываешь КБЖУ.
 
-Принципы:
+ОБЯЗАТЕЛЬНЫЕ СЦЕНАРИИ ДЕЙСТВИЙ (вызывай tools, не ограничивайся текстом!):
+
+1) «Завтра/сегодня поем в ресторане вместо ужина» / «Будет ужин вне плана»:
+   → get_week_plan (найди нужный приём по дате)
+   → update_meal_status(meal_id, status='skipped', reason='ужин в ресторане')
+   → если есть container_label у этого приёма: update_container(label, status='frozen', note='перенёс на следующую неделю')
+   → ответь пользователю: что отменил, куда переложил еду
+
+2) «Съел / выпил что-то не по плану» (пицца, пиво, торт):
+   → register_deviation(description, kcal, protein_g, fat_g, carbs_g) — оцени КБЖУ сам
+   → recalculate_plan(deviation_id) — пересчитай нормы на остаток недели
+   → ответь: на сколько ккал/день уменьшились нормы
+
+3) «Пропустил завтрак / обед» (уже произошло):
+   → get_today_plan (найди meal_id пропущенного приёма)
+   → update_meal_status(meal_id, status='skipped', reason='пропустил')
+   → если контейнер был приготовлен: update_container(label, status='frozen', note='пропуск, в морозилку')
+
+4) «Что у меня сегодня / что скоро испортится / какие нормы»:
+   → get_today_plan / get_expiring_soon / get_user_profile
+
+ПРИНЦИПЫ:
+- ВСЕГДА сначала смотри план через get_today_plan или get_week_plan чтобы найти meal_id
+- ВСЕГДА вызывай tools для действий — не описывай словами «можно перенести», а ПЕРЕНОСИ
 - Говори по-русски, дружелюбно, без осуждения
-- Будь конкретным: называй числа, контейнеры, время
-- При отклонениях — не ругай, а адаптируй
-- Отвечай кратко (2-4 предложения) на простые вопросы, развёрнуто на сложные
-- Используй инструменты проактивно, чтобы давать точные персонализированные ответы
-- Если инструмент вернул ошибку — не вызывай его повторно, объясни ситуацию пользователю"""
+- Будь конкретным: называй контейнеры (1А, 2Б), даты, цифры КБЖУ
+- Кратко (2–4 предложения) описывай что сделал, без пустых фраз
+- Если tool вернул ошибку — объясни простым языком, не повторяй вызов"""
 
 
 def _build_system(context: str) -> str:
@@ -165,40 +186,62 @@ def _sync_call(
 
 def classify_tier(raw: str) -> Literal["free", "lite", "pro"]:
     """
-    Classify a user message into one of three cost tiers:
+    3-tier cost-optimised routing:
 
-    free — SimpleAgent handles it (rule-based, no API tokens spent)
-         Covers: greeting, today_plan, restaurant, skipped, ate_extra,
-                 reschedule, simplify, weight, targets, expiring, next_meal
+    free — SimpleAgent (rule-based, no API tokens)
+         Pure information / generic advice — no plan changes needed.
+         Covers: greeting, today_plan, expiring, next_meal, targets,
+                 weight, simplify
 
-    lite — GigaChat (basic model, no tools), general nutrition chat
-         Covers: unknown intent that isn't a complex operation
+    lite — GigaChat basic (no function_calling)
+         General nutrition questions where actions aren't required.
 
     pro  — GigaChat-Pro with function_calling
-         Covers: plan rebuild/regeneration, cooking-plan creation,
-                 deviation registration, any explicit planning request
+         ANY message that requires the agent to TAKE ACTIONS:
+         move meals, mark statuses, register deviations, recalc,
+         move containers to freezer, build / rebuild plans.
     """
     from app.ai.simple_agent import detect_intent, _norm, _any, _phrase
 
     m = _norm(raw)
 
-    # PRO signals: explicit plan manipulation or cooking-plan creation
-    if _any(m, ["перестрой", "пересостав", "перепланируй", "пересчитай"]):
+    # ── Action-requiring intents — always Pro (agent must use tools) ──
+    intent = detect_intent(raw)
+    action_intents = {
+        "restaurant",      # "поем в ресторане" → перенести приём, контейнер в морозилку
+        "skipped",         # "пропустил обед" → отметить, перенести контейнер
+        "ate_extra",       # "съел пиццу" → register_deviation + recalc
+        "ate_unplanned",   # "съел что-то" → register_deviation
+        "reschedule",      # "перенеси приём" → update_meal_status
+    }
+    if intent in action_intents:
+        return "pro"
+
+    # Explicit plan-rebuild / cooking-plan keywords — Pro
+    if _any(m, ["перестрой", "пересостав", "перепланируй", "пересчитай",
+                "отмени", "перенеси"]):
         return "pro"
     if _phrase(m, [
         "план готовки", "план на неделю", "новый план",
         "запиши отклонение", "добавь в журнал",
         "сгенерируй план", "составь план", "перестрой план",
-        "обнови план",
+        "обнови план", "в морозилку", "в морозильник",
+        "не буду есть", "не буду ужинать", "не буду обедать",
+        "буду есть в", "поем в", "ужин в ресторане",
+        "планирую ужин", "планирую обед", "планирую завтрак",
+        "завтра ужин", "завтра обед", "завтра завтрак",
     ]):
         return "pro"
 
-    # FREE signals: SimpleAgent already handles these intents well
-    intent = detect_intent(raw)
-    if intent != "unknown":
+    # Pure-info intents handled by SimpleAgent for free
+    free_intents = {
+        "greeting", "today_plan", "expiring", "next_meal",
+        "targets", "weight", "simplify",
+    }
+    if intent in free_intents:
         return "free"
 
-    # LITE: general nutrition question — send to cheap model, no tools
+    # Unknown / general nutrition question — cheap Lite model
     return "lite"
 
 
@@ -341,10 +384,22 @@ class GigachatAgentService:
                     if meal.kbzhu_actual and meal.kbzhu_actual.get("kcal")
                     else ""
                 )
-                ctr = f" [контейнер {meal.container_id}]" if meal.container_id else ""
-                lines.append(f"  {icon} {label}:{kcal}{ctr}")
+                ctr_label = meal.container.label if meal.container else None
+                ctr = f" [контейнер {ctr_label}]" if ctr_label else ""
+                lines.append(f"  {icon} {label} (meal_id={meal.id}):{kcal}{ctr}")
         else:
             lines.append("Меню на сегодня не расписано.")
+
+        # Tomorrow's plan (helps "завтра ужин в ресторане" scenarios)
+        tomorrow = today + __import__("datetime").timedelta(days=1)
+        tom_day = await self._get_today_day(plan, tomorrow)
+        if tom_day and tom_day.meals:
+            lines.append(f"Меню на завтра ({tomorrow.strftime('%d.%m')}):")
+            for meal in sorted(tom_day.meals, key=lambda m: MEAL_ORDER.get(m.meal_type, 9)):
+                label = MEAL_LABELS.get(meal.meal_type, meal.meal_type)
+                ctr_label = meal.container.label if meal.container else None
+                ctr = f" [контейнер {ctr_label}]" if ctr_label else ""
+                lines.append(f"  • {label} (meal_id={meal.id}):{ctr}")
 
         lines.append("=== КОНЕЦ ===")
         return "\n".join(lines)
@@ -368,10 +423,11 @@ class GigachatAgentService:
         return r.scalar_one_or_none()
 
     async def _get_today_day(self, plan: MealPlan, day_date: date) -> DayPlan | None:
+        from app.models.plan import Meal
         r = await self.session.execute(
             select(DayPlan)
             .where(DayPlan.plan_id == plan.id)
             .where(DayPlan.date == day_date)
-            .options(selectinload(DayPlan.meals))
+            .options(selectinload(DayPlan.meals).selectinload(Meal.container))
         )
         return r.scalar_one_or_none()
