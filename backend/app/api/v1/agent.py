@@ -7,12 +7,21 @@ from app.core.database import get_session
 from app.core.security import get_current_user_id
 from app.ai.agent import AgentService
 from app.ai.simple_agent import SimpleAgentService
+from app.ai.gigachat_agent import GigachatAgentService
 
 
 def _get_agent(session: AsyncSession):
-    """Return SimpleAgentService unless a real API key is configured."""
-    settings = get_settings()
-    if settings.anthropic_api_key or settings.use_local_llm:
+    """
+    Agent priority:
+      1. GigaChat  — if USE_GIGACHAT=true and credentials are set
+      2. Anthropic — if ANTHROPIC_API_KEY is set
+      3. Ollama    — if USE_LOCAL_LLM=true
+      4. Simple    — rule-based fallback (no external API needed)
+    """
+    s = get_settings()
+    if s.use_gigachat and s.gigachat_credentials:
+        return GigachatAgentService(session)
+    if s.anthropic_api_key or s.use_local_llm:
         return AgentService(session)
     return SimpleAgentService(session)
 

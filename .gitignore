@@ -1,6 +1,7 @@
 # --- Secrets ---
 .env
 !.env.example
+.env.gigachat
 *.pem
 *.key
 secrets/
