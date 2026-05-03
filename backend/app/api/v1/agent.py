@@ -1,3 +1,6 @@
+import logging
+import traceback
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +11,8 @@ from app.core.security import get_current_user_id
 from app.ai.agent import AgentService
 from app.ai.simple_agent import SimpleAgentService
 from app.ai.gigachat_agent import GigachatAgentService, classify_tier
+
+logger = logging.getLogger("kbzhuy.agent_route")
 
 
 def _get_agent(session: AsyncSession, message: str = ""):
@@ -68,6 +73,7 @@ async def chat_with_agent(
             history=body.history,
         )
     except Exception as e:
+        logger.error("agent_chat failed: %s\n%s", e, traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
     return ChatResponse(**result)
 
@@ -91,5 +97,6 @@ async def adapt_plan(
     try:
         result = await svc.chat(user_id=user_id, message=message)
     except Exception as e:
+        logger.error("agent_chat failed: %s\n%s", e, traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
     return ChatResponse(**result)
