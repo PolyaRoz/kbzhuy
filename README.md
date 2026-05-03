@@ -130,15 +130,16 @@ chmod +x start.sh stop.sh
 
 ### Включить агента (GigaChat)
 
+> ⚠️ **Для проверяющих:** креды автора в репозитории отсутствуют (файл `.env.gigachat` в `.gitignore` и никогда не коммитился). Нужны **свои** креды от Sber Studio — иначе приложение запустится со статическим SimpleAgent (всё работает, кроме умного чата).
+
 Без агента приложение работает полностью — кроме чата (там будет SimpleAgent с заготовленными ответами). Чтобы включить полноценного агента-исполнителя:
 
 1. Получи ключ авторизации на <https://developers.sber.ru/studio> → GigaChat API → Settings → Authorization
-2. Создай файл `.env.gigachat` в корне проекта (рядом с `start.bat`):
+2. Скопируй шаблон и впиши свой ключ:
 
-   ```ini
-   KBZHUY_USE_GIGACHAT=true
-   KBZHUY_GIGACHAT_CREDENTIALS=твой_base64_ключ
-   KBZHUY_GIGACHAT_MODEL=GigaChat-Pro
+   ```bash
+   cp .env.gigachat.example .env.gigachat
+   # потом в .env.gigachat поставь USE_GIGACHAT=true и вставь свой CREDENTIALS
    ```
 
 3. Перезапусти API:

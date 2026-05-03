@@ -2,9 +2,18 @@
 .env
 !.env.example
 .env.gigachat
+!.env.gigachat.example
+.env.local
+.env.*.local
+*credentials*
+!*.example
 *.pem
 *.key
+*.p12
+*.pfx
 secrets/
+auth_token*
+gigachat_token*
 
 # --- Python ---
 __pycache__/
