@@ -2,10 +2,17 @@
 chcp 65001 >nul
 cd /d %~dp0
 
-REM Disable GigaChat by flipping the toggle in .env.gigachat (the file is loaded by docker-compose).
-if exist .env.gigachat (
-    powershell -NoProfile -Command "(Get-Content .env.gigachat) -replace 'KBZHUY_USE_GIGACHAT=true','KBZHUY_USE_GIGACHAT=false' | Set-Content .env.gigachat"
+if not exist .env.gigachat (
+    echo Файл .env.gigachat не найден — нечего выключать.
+    pause
+    exit /b 0
 )
+
+REM Flip the toggle line in-place. Find /v copies all lines except the "true" one,
+REM then we re-add the false line. Works without PowerShell.
+findstr /v /b "KBZHUY_USE_GIGACHAT=" .env.gigachat > .env.gigachat.tmp
+echo KBZHUY_USE_GIGACHAT=false>> .env.gigachat.tmp
+move /y .env.gigachat.tmp .env.gigachat >nul
 
 echo [GigaChat] Перезапускаю API без GigaChat (rule-based агент)...
 docker compose -f infra/docker-compose.dev.yml up -d --no-deps api

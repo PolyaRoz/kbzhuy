@@ -9,14 +9,10 @@ if not exist .env.gigachat (
     exit /b 1
 )
 
-REM Make sure the file has the toggle ON. The compose env_file picks it up automatically.
-findstr /C:"KBZHUY_USE_GIGACHAT=true" .env.gigachat >nul
-if errorlevel 1 (
-    echo Внимание: в .env.gigachat не выставлено KBZHUY_USE_GIGACHAT=true.
-    echo Проверь файл и попробуй снова.
-    pause
-    exit /b 1
-)
+REM Make sure the toggle line is set to true. Strip any old USE_GIGACHAT lines first.
+findstr /v /b "KBZHUY_USE_GIGACHAT=" .env.gigachat > .env.gigachat.tmp
+echo KBZHUY_USE_GIGACHAT=true>> .env.gigachat.tmp
+move /y .env.gigachat.tmp .env.gigachat >nul
 
 echo [GigaChat] Перезапускаю API с GigaChat (env_file подхватится автоматически)...
 docker compose -f infra/docker-compose.dev.yml up -d --no-deps api
