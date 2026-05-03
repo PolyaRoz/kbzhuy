@@ -4,7 +4,9 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api/v
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  // 60s — the AI agent can spend 15-25s chaining multiple GigaChat tool calls.
+  // 15s used to time out a successful agent flow → user saw "Ошибка соединения".
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });
 

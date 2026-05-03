@@ -44,9 +44,9 @@ TOOLS: list[dict] = [
     {
         "name": "register_deviation",
         "description": (
-            "Register that the user ate something outside the plan (spontaneous deviation). "
-            "This records the extra calories and enables plan recalculation. "
-            "Use when user says they ate something unplanned."
+            "Register that the user ate (or will eat) something outside the plan. "
+            "Returns {id: int}. After this succeeds you MUST call recalculate_plan(deviation_id=<that id>) "
+            "as the next step — never call get_week_plan or build_meal_plan after register_deviation."
         ),
         "input_schema": {
             "type": "object",
@@ -164,9 +164,12 @@ TOOLS: list[dict] = [
     {
         "name": "build_meal_plan",
         "description": (
-            "Generate and save a 7-day meal plan for the user based on their profile. "
-            "Call this tool after reviewing the user's profile to create a personalized plan. "
-            "The plan will include meals, containers, and a shopping list."
+            "DESTRUCTIVE: generates a brand new 7-day plan and CANCELS overlapping plans. "
+            "ONLY call this when the user explicitly asks for a new plan from scratch "
+            "(e.g. 'составь план на следующую неделю', 'сгенерируй новый план'). "
+            "NEVER call this for adjustments, deviations, restaurant visits, skipped meals, "
+            "or 'завтра планирую X' scenarios — those are handled by update_meal_status / "
+            "register_deviation / recalculate_plan / update_container."
         ),
         "input_schema": {
             "type": "object",
