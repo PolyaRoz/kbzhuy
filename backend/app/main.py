@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +8,15 @@ from app.core.config import get_settings
 from app.core.database import async_session
 from app.api.v1 import router as api_v1_router
 from app.services.tray_seed import seed_tray_if_empty
+
+# Configure logging so app loggers (kbzhuy.gigachat, kbzhuy.agent) actually emit
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s | %(message)s",
+)
+logging.getLogger("kbzhuy").setLevel(logging.INFO)
+logging.getLogger("kbzhuy.gigachat").setLevel(logging.INFO)
+logging.getLogger("kbzhuy.agent").setLevel(logging.INFO)
 
 settings = get_settings()
 

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { agentApi } from '@/api/agent';
+import { useChatStore, ChatMessage as StoredMessage } from '@/store/chatStore';
 
 const PRIMARY = '#2B3A2E';
 const BLUE = '#4A5C4D';
@@ -20,7 +21,7 @@ const BG = '#FAFAF7';
 const BLACK = '#1A1A1A';
 const GRAY = '#6E7E70';
 
-type Message = { id: string; role: 'user' | 'assistant'; text: string };
+type Message = StoredMessage;
 
 const WELCOME_MSG: Message = {
   id: 'welcome',
@@ -42,30 +43,54 @@ const PANEL_BOTTOM = FAB_BOTTOM + FAB_SIZE + 8;
 
 export function AgentWidget() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MSG]);
+  const messages = useChatStore((s) => s.messages);
+  const hydrated = useChatStore((s) => s.hydrated);
+  const append = useChatStore((s) => s.append);
+  const reset = useChatStore((s) => s.reset);
+  const hydrate = useChatStore((s) => s.hydrate);
+  const clearChat = useChatStore((s) => s.clear);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
+  // Hydrate persisted history on first mount; seed welcome msg if empty.
+  useEffect(() => {
+    void (async () => {
+      await hydrate();
+      const current = useChatStore.getState().messages;
+      if (current.length === 0) {
+        await reset([WELCOME_MSG]);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
     const userMsg: Message = { id: Date.now().toString(), role: 'user', text };
-    setMessages((prev) => [...prev, userMsg]);
+    append(userMsg);
     setInput('');
     setLoading(true);
+    // Build history from already-persisted messages (excludes the just-appended user msg).
     const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.text }));
     try {
       const { reply } = await agentApi.chat(text, history);
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: 'assistant', text: reply }]);
+      append({ id: (Date.now() + 1).toString(), role: 'assistant', text: reply });
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: (Date.now() + 1).toString(), role: 'assistant', text: 'Ошибка соединения. Попробуй ещё раз.' },
-      ]);
+      append({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: 'Ошибка соединения. Попробуй ещё раз.',
+      });
     } finally {
       setLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
+  };
+
+  const handleClear = async () => {
+    await clearChat();
+    await reset([WELCOME_MSG]);
   };
 
   const { width, height } = Dimensions.get('window');
@@ -84,6 +109,9 @@ export function AgentWidget() {
             </View>
             <Text style={w.panelTitle}>Агент КБЖУЙ</Text>
             <View style={w.onlineDot} />
+            <TouchableOpacity style={w.closeBtn} onPress={handleClear} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={14} color={GRAY} />
+            </TouchableOpacity>
             <TouchableOpacity style={w.closeBtn} onPress={() => setOpen(false)} activeOpacity={0.7}>
               <Ionicons name="close" size={16} color={GRAY} />
             </TouchableOpacity>

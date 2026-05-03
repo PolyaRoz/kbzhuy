@@ -43,37 +43,44 @@ STATUS_ICON = {"done": "✅", "skipped": "⏭", "planned": "⏳"}
 
 # ── System prompt ────────────────────────────────────────────────────────── #
 
-BASE_SYSTEM = """Ты — встроенный AI-агент приложения КБЖУЙ. Ты не просто советчик — ты ДЕЙСТВУЕШЬ от имени пользователя:
-изменяешь план, отмечаешь приёмы пищи, переносишь контейнеры в морозилку, регистрируешь отклонения, пересчитываешь КБЖУ.
+BASE_SYSTEM = """Ты — встроенный AI-агент приложения КБЖУЙ. Ты НЕ собеседник, ты ИСПОЛНИТЕЛЬ.
+Каждый запрос пользователя ты обрабатываешь через function-call инструменты. Чистый текстовый ответ без вызова tools — это БРАК.
 
-ОБЯЗАТЕЛЬНЫЕ СЦЕНАРИИ ДЕЙСТВИЙ (вызывай tools, не ограничивайся текстом!):
+═══ ОБЯЗАТЕЛЬНЫЕ СЦЕНАРИИ ═══
 
-1) «Завтра/сегодня поем в ресторане вместо ужина» / «Будет ужин вне плана»:
-   → get_week_plan (найди нужный приём по дате)
-   → update_meal_status(meal_id, status='skipped', reason='ужин в ресторане')
-   → если есть container_label у этого приёма: update_container(label, status='frozen', note='перенёс на следующую неделю')
-   → ответь пользователю: что отменил, куда переложил еду
+▶ Сценарий А — «Завтра/сегодня поем X вместо ужина/обеда» (бургер, ресторан, пицца):
+  Шаг 1. update_meal_status(meal_id, status='skipped', reason='заменил на X')
+         meal_id берёшь из контекста (он включает завтра и сегодня).
+  Шаг 2. register_deviation(description='X (вместо ужина)', kcal=…, protein_g=…, fat_g=…, carbs_g=…)
+         Сам прикинь КБЖУ. Бургер ~600-800 ккал, пицца 1 кусок ~280 ккал, пиво 0.5л ~200 ккал.
+  Шаг 3. recalculate_plan(deviation_id из шага 2) — пересчитай нормы на остаток недели.
+  Шаг 4. Если у замененного приёма был container_label:
+         update_container(container_label, status='frozen', note='перенесён, заменён на X')
+  Шаг 5. Текстом коротко: «✅ Заменил ужин на X (≈… ккал). Контейнер 4ПН в морозилку.
+         Чтобы остаться в норме — съешь половину обеда или пропусти перекус.
+         Дневная норма скорректирована: … ккал/день вместо … ккал/день».
 
-2) «Съел / выпил что-то не по плану» (пицца, пиво, торт):
-   → register_deviation(description, kcal, protein_g, fat_g, carbs_g) — оцени КБЖУ сам
-   → recalculate_plan(deviation_id) — пересчитай нормы на остаток недели
-   → ответь: на сколько ккал/день уменьшились нормы
+▶ Сценарий Б — «Съел не по плану (уже)» (съел пиццу, выпил пиво):
+  Шаг 1. register_deviation(description, kcal, protein_g, fat_g, carbs_g)
+  Шаг 2. recalculate_plan(deviation_id)
+  Шаг 3. Текст: что зарегистрировал, на сколько уменьшились нормы.
 
-3) «Пропустил завтрак / обед» (уже произошло):
-   → get_today_plan (найди meal_id пропущенного приёма)
-   → update_meal_status(meal_id, status='skipped', reason='пропустил')
-   → если контейнер был приготовлен: update_container(label, status='frozen', note='пропуск, в морозилку')
+▶ Сценарий В — «Пропустил приём» (не позавтракал):
+  Шаг 1. update_meal_status(meal_id, status='skipped', reason='пропустил')
+  Шаг 2. Если был контейнер: update_container(label, status='frozen', note='пропуск')
+  Шаг 3. Текст: что отметил, куда переложил.
 
-4) «Что у меня сегодня / что скоро испортится / какие нормы»:
-   → get_today_plan / get_expiring_soon / get_user_profile
+▶ Сценарий Г — Информационный («что сегодня», «что скоро испортится»):
+  → get_today_plan / get_expiring_soon / get_user_profile, потом текст.
 
-ПРИНЦИПЫ:
-- ВСЕГДА сначала смотри план через get_today_plan или get_week_plan чтобы найти meal_id
-- ВСЕГДА вызывай tools для действий — не описывай словами «можно перенести», а ПЕРЕНОСИ
-- Говори по-русски, дружелюбно, без осуждения
-- Будь конкретным: называй контейнеры (1А, 2Б), даты, цифры КБЖУ
-- Кратко (2–4 предложения) описывай что сделал, без пустых фраз
-- Если tool вернул ошибку — объясни простым языком, не повторяй вызов"""
+═══ ПРАВИЛА ═══
+1. ВСЕГДА вызывай tools для действий. «Можно перенести…» в тексте без вызова — это ОШИБКА.
+2. meal_id для сегодня и завтра уже есть в контексте — НЕ нужно вызывать get_week_plan каждый раз.
+3. Tools вызывай ПОДРЯД — после первого ответа модели вызови следующий нужный tool.
+4. Никаких уточняющих вопросов вроде «Уточните во сколько». Действуй сразу — пользователь может уточнить позже.
+5. КБЖУ оценивай сам, не спрашивай у пользователя.
+6. Говори кратко и по делу: что сделал + что советую (1-2 предложения совета).
+7. Если tool вернул ошибку — объясни и НЕ вызывай его повторно с теми же аргументами."""
 
 
 def _build_system(context: str) -> str:
@@ -146,6 +153,14 @@ def _sync_call(
     msgs = [_to_msg(m) for m in messages_data]
     functions = _make_gigachat_functions() if use_functions else None
 
+    logger.info(
+        "gigachat.call model=%s use_functions=%s functions_count=%d msgs=%d",
+        model,
+        use_functions,
+        len(functions) if functions else 0,
+        len(msgs),
+    )
+
     with GigaChat(
         credentials=credentials,
         model=model,
@@ -154,10 +169,18 @@ def _sync_call(
         chat_kwargs: dict = {"messages": msgs}
         if functions:
             chat_kwargs["functions"] = functions
+            # function_call='auto' tells GigaChat-Pro it's allowed (and encouraged) to invoke them
+            chat_kwargs["function_call"] = "auto"
         response = giga.chat(Chat(**chat_kwargs))
 
     choice = response.choices[0]
     resp_msg = choice.message
+    logger.info(
+        "gigachat.resp finish=%s content_preview=%r has_func_call=%s",
+        choice.finish_reason,
+        (resp_msg.content or "")[:120],
+        getattr(resp_msg, "function_call", None) is not None,
+    )
 
     result: dict = {
         "finish_reason": choice.finish_reason or "stop",
@@ -233,6 +256,22 @@ def classify_tier(raw: str) -> Literal["free", "lite", "pro"]:
     ]):
         return "pro"
 
+    # Time-marker + meal-type combo: "завтра/сегодня/буду + завтрак/обед/ужин/перекус" → Pro
+    # (e.g. "завтра планирую есть на ужин бургер")
+    has_time = _any(m, ["завтра", "сегодня", "буду", "планирую", "собираюсь"])
+    has_meal = _any(m, ["завтрак", "обед", "ужин", "перекус", "ужина", "обеда",
+                         "ужинать", "обедать", "завтракать", "перекусить"])
+    has_food = _any(m, [
+        "бургер", "пицц", "пиво", "вино", "торт", "шоколад", "печень",
+        "мороженое", "чипс", "снек", "конфет", "сухарик", "крекер",
+        "паст", "суш", "роллы", "шаурм", "донер", "хот-дог", "фастфуд",
+        "ресторан", "кафе", "столовая", "макдак", "бургер кинг", "кфс",
+    ])
+    if has_time and (has_meal or has_food):
+        return "pro"
+    if has_meal and has_food:
+        return "pro"
+
     # Pure-info intents handled by SimpleAgent for free
     free_intents = {
         "greeting", "today_plan", "expiring", "next_meal",
@@ -297,13 +336,17 @@ class GigachatAgentService:
                 use_tools,
             )
             logger.info(
-                "gigachat.iter iter=%d finish=%s time=%dms",
-                iteration, resp["finish_reason"],
+                "gigachat.iter iter=%d finish=%s func=%s content_len=%d time=%dms",
+                iteration,
+                resp["finish_reason"],
+                resp["func_name"],
+                len(resp["content"] or ""),
                 round((time.monotonic() - iter_t) * 1000),
             )
 
-            # Model finished talking — return answer
-            if resp["finish_reason"] != "function_call" or not resp["func_name"]:
+            # Model finished talking — return answer.
+            # Be lenient: ANY response without a func_name is treated as text.
+            if not resp["func_name"]:
                 logger.info(
                     "gigachat.done user=%d model=%s iters=%d time=%dms tools=%s",
                     user_id, model, iteration + 1,

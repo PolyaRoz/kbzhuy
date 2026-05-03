@@ -10,11 +10,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { agentApi } from '@/api/agent';
 import { usePlanStore } from '@/store/planStore';
+import { useChatStore, ChatMessage as StoredMessage } from '@/store/chatStore';
 
 const PRIMARY = '#2B3A2E';
 const BG = '#FAFAF7';
@@ -22,11 +23,7 @@ const CARD = '#FFFFFF';
 const BLACK = '#1A1A1A';
 const GRAY = '#6E7E70';
 
-type Message = {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
-};
+type Message = StoredMessage;
 
 const QUICK_ACTIONS = [
   { id: 'pizza',    icon: 'restaurant-outline', label: 'Съел не по плану',   message: 'Я съел пиццу (2 куска, ~600 ккал). Перестрой остаток дня.' },
@@ -54,16 +51,31 @@ export default function AgentScreen() {
   // Show onboarding flow until the user has a plan
   const isOnboarding = hasFetchedCurrent && !plan;
 
-  const [messages, setMessages] = useState<Message[]>([isOnboarding ? ONBOARDING_MSG : WELCOME_MSG]);
+  const messages = useChatStore((s) => s.messages);
+  const append = useChatStore((s) => s.append);
+  const reset = useChatStore((s) => s.reset);
+  const hydrate = useChatStore((s) => s.hydrate);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  // Hydrate persisted history; seed welcome/onboarding only if empty.
+  useEffect(() => {
+    void (async () => {
+      await hydrate();
+      const current = useChatStore.getState().messages;
+      if (current.length === 0) {
+        await reset([isOnboarding ? ONBOARDING_MSG : WELCOME_MSG]);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnboarding]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', text };
-    setMessages((prev) => [...prev, userMsg]);
+    append(userMsg);
     setInput('');
     setLoading(true);
 
@@ -74,17 +86,13 @@ export default function AgentScreen() {
 
     try {
       const { reply } = await agentApi.chat(text, history);
-      const assistantMsg: Message = {
+      append({ id: (Date.now() + 1).toString(), role: 'assistant', text: reply });
+    } catch {
+      append({
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        text: reply,
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: (Date.now() + 1).toString(), role: 'assistant', text: 'Ошибка соединения. Проверь интернет.' },
-      ]);
+        text: 'Ошибка соединения. Проверь интернет.',
+      });
     } finally {
       setLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
