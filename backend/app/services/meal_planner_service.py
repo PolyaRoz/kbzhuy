@@ -646,15 +646,19 @@ class MealPlannerService:
         meal_schedule = self._profile_meal_schedule(profile)
         used_week_names: dict[str, int] = {}
 
-        # Load titles the user queued from the Tray feed ("add to plan" button).
-        # These get a score boost in the beam search so they appear in the week.
-        pending_requests_result = await self.session.execute(
-            select(PlanRecipeRequest)
-            .where(PlanRecipeRequest.user_id == user_id)
-            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
-        )
-        pending_requests = pending_requests_result.scalars().all()
-        preferred_names: set[str] = {req.title.casefold() for req in pending_requests}
+        # "Add to plan" queue applies ONLY to plans for a future period
+        # (the next week, not regenerations of the current week).
+        is_future_plan = week_start > date.today()
+        pending_requests = []
+        preferred_names: set[str] = set()
+        if is_future_plan:
+            pending_requests_result = await self.session.execute(
+                select(PlanRecipeRequest)
+                .where(PlanRecipeRequest.user_id == user_id)
+                .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+            )
+            pending_requests = pending_requests_result.scalars().all()
+            preferred_names = {req.title.casefold() for req in pending_requests}
 
         for day_offset in range(7):
             day_date = week_start + timedelta(days=day_offset)
@@ -695,8 +699,11 @@ class MealPlannerService:
 
         await self.session.commit()
 
-        # Mark all pending plan-recipe requests as consumed by this plan
+        # Force-insert any queued recipes whose post titles didn't naturally match
+        # a JSON-DB recipe (boost only helps when titles overlap). This guarantees
+        # every "В план"-tapped recipe appears in the next-period plan.
         if pending_requests:
+            await self._force_insert_queued_recipes(plan.id, pending_requests)
             pending_ids = [req.id for req in pending_requests]
             await self.session.execute(
                 update(PlanRecipeRequest)
@@ -707,6 +714,74 @@ class MealPlannerService:
 
         await self.session.refresh(plan)
         return plan
+
+    async def _force_insert_queued_recipes(
+        self,
+        plan_id: int,
+        requests: list,
+    ) -> None:
+        """For each queued recipe not already in the plan, replace one meal slot.
+
+        Priority: lunch → dinner → breakfast → snack across days, so the first
+        few queued recipes land on the most "main" slots. КБЖУ of the displaced
+        meal is kept as a placeholder estimate (community posts have no КБЖУ).
+        """
+        result = await self.session.execute(
+            select(MealPlan)
+            .where(MealPlan.id == plan_id)
+            .options(
+                selectinload(MealPlan.days)
+                .selectinload(DayPlan.meals)
+                .selectinload(Meal.container)
+            )
+        )
+        full_plan = result.scalar_one()
+
+        # Determine which requests are already in the plan (boost worked / fuzzy match)
+        descriptions = [
+            (meal.container.contents_description or "").casefold()
+            for day in full_plan.days
+            for meal in day.meals
+            if meal.container and meal.container.contents_description
+        ]
+        unfulfilled = [
+            req for req in requests
+            if not any(
+                req.title.casefold() in desc or desc in req.title.casefold()
+                for desc in descriptions
+                if desc
+            )
+        ]
+        if not unfulfilled:
+            return
+
+        # Build prioritized slot order: lunch → dinner → breakfast → snack
+        days_sorted = sorted(full_plan.days, key=lambda d: d.date)
+        type_priority = ("lunch", "meal_2", "dinner", "meal_4", "breakfast", "meal_1", "snack", "meal_3")
+        slot_pool: list[Meal] = []
+        seen_meal_ids: set[int] = set()
+        for meal_type in type_priority:
+            for day in days_sorted:
+                for meal in day.meals:
+                    if meal.id in seen_meal_ids:
+                        continue
+                    if meal.meal_type == meal_type and meal.container is not None:
+                        slot_pool.append(meal)
+                        seen_meal_ids.add(meal.id)
+        # Fallback: any remaining meals (custom meal_types)
+        for day in days_sorted:
+            for meal in day.meals:
+                if meal.id not in seen_meal_ids and meal.container is not None:
+                    slot_pool.append(meal)
+                    seen_meal_ids.add(meal.id)
+
+        for req, target in zip(unfulfilled, slot_pool):
+            target.container.contents_description = req.title
+            # Mark visually so the user knows it's their custom recipe
+            target.container.heating_instructions = (
+                "Твой рецепт из ленты «Поднос» — приготовь по своему усмотрению"
+            )
+        # Commit happens in caller
 
     async def _deactivate_overlapping_plans(self, user_id: int, week_start: date, week_end: date) -> None:
         await self.session.execute(

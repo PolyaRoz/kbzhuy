@@ -51,6 +51,23 @@ export default function TrayScreen() {
   const [activeCategory, setActiveCategory] = useState<PostCategory | 'all' | 'mine'>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback(
+    (message: string) => {
+      setToastMessage(message);
+      Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => {
+        Animated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
+          setToastMessage(null);
+        });
+      }, 2400);
+    },
+    [toastAnim],
+  );
 
   const fetchPosts = useCallback(async (category: PostCategory | 'all' | 'mine', refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -91,6 +108,15 @@ export default function TrayScreen() {
       setPosts((prev) =>
         prev.map((p) => (p.id === post.id ? { ...p, queued_for_plan: res.queued } : p)),
       );
+      if (res.queued) {
+        showToast(
+          res.applied_to_plan_id
+            ? 'Добавлен в план следующей недели'
+            : 'Будет добавлен при создании плана на следующую неделю',
+        );
+      } else {
+        showToast('Убран из очереди');
+      }
     } catch {
       // Revert on error
       setPosts((prev) =>
@@ -129,6 +155,30 @@ export default function TrayScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
+      {/* ── transient toast ── */}
+      {toastMessage ? (
+        <Animated.View
+          style={[
+            s.toast,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-12, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <Ionicons name="checkmark-circle" size={16} color="#fff" />
+          <Text style={s.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      ) : null}
+
       {/* ── fixed header ── */}
       <View style={s.headerRow}>
         <Text style={s.title}>Поднос</Text>
@@ -487,4 +537,32 @@ const s = StyleSheet.create({
   },
   emptyText: { fontSize: 16, fontWeight: '700', color: BLACK, marginBottom: 6, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
   emptyHint: { fontSize: 13, color: GRAY, textAlign: 'center', lineHeight: 18, fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" },
+
+  // ── toast ─────────────────────────────────────────────
+  toast: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    backgroundColor: PLAN_GREEN,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+    flex: 1,
+  },
 });

@@ -1,14 +1,16 @@
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.user import User
+from app.models.plan import MealPlan, DayPlan, Meal
 from app.models.post import Post, PostComment, PostLike, PlanRecipeRequest
 
 router = APIRouter()
@@ -118,13 +120,22 @@ async def list_posts(
     ).all()
     my_likes = {row[0] for row in my_likes_rows}
 
-    # Pending plan-queue status (NULL used_in_plan_id = still queued)
+    # Plan-queue status: button stays "В плане" while either
+    #   (a) request is still pending (NULL used_in_plan_id), or
+    #   (b) request was eagerly inserted into a still-active future plan.
+    today = date.today()
     my_queued_rows = (
         await db.execute(
             select(PlanRecipeRequest.post_id)
+            .outerjoin(MealPlan, MealPlan.id == PlanRecipeRequest.used_in_plan_id)
             .where(PlanRecipeRequest.post_id.in_(post_ids))
             .where(PlanRecipeRequest.user_id == user_id)
-            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+            .where(
+                or_(
+                    PlanRecipeRequest.used_in_plan_id.is_(None),
+                    and_(MealPlan.status == "active", MealPlan.period_end >= today),
+                )
+            )
         )
     ).all()
     my_queued = {row[0] for row in my_queued_rows}
@@ -189,9 +200,15 @@ async def get_post(
     queued_for_plan = (
         await db.execute(
             select(PlanRecipeRequest.id)
+            .outerjoin(MealPlan, MealPlan.id == PlanRecipeRequest.used_in_plan_id)
             .where(PlanRecipeRequest.post_id == post_id)
             .where(PlanRecipeRequest.user_id == user_id)
-            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+            .where(
+                or_(
+                    PlanRecipeRequest.used_in_plan_id.is_(None),
+                    and_(MealPlan.status == "active", MealPlan.period_end >= date.today()),
+                )
+            )
         )
     ).first() is not None
 
@@ -254,6 +271,76 @@ async def toggle_like(
 # ----- Plan-queue -----
 
 
+async def _insert_into_existing_future_plan(
+    db: AsyncSession, user_id: int, title: str
+) -> int | None:
+    """If the user already has a generated plan for a future period, replace
+    one of its meal slots with this recipe immediately. Returns plan_id if
+    inserted, None otherwise.
+    """
+    today = date.today()
+    result = await db.execute(
+        select(MealPlan)
+        .where(MealPlan.user_id == user_id)
+        .where(MealPlan.status == "active")
+        .where(MealPlan.period_start > today)
+        .order_by(MealPlan.period_start.asc())
+        .options(
+            selectinload(MealPlan.days)
+            .selectinload(DayPlan.meals)
+            .selectinload(Meal.container)
+        )
+    )
+    future_plan = result.scalars().first()
+    if not future_plan or not future_plan.days:
+        return None
+
+    title_lower = title.casefold()
+
+    # Skip if already in plan (idempotent)
+    for day in future_plan.days:
+        for meal in day.meals:
+            desc = (meal.container.contents_description or "").casefold() if meal.container else ""
+            if desc and (title_lower in desc or desc in title_lower):
+                return future_plan.id  # already there, treat as success
+
+    # Pick a slot, prioritizing lunch / main meals
+    days_sorted = sorted(future_plan.days, key=lambda d: d.date)
+    type_priority = (
+        "lunch", "meal_2", "dinner", "meal_4",
+        "breakfast", "meal_1", "snack", "meal_3",
+    )
+    target: Meal | None = None
+    for meal_type in type_priority:
+        for day in days_sorted:
+            for meal in day.meals:
+                if meal.meal_type == meal_type and meal.container is not None:
+                    target = meal
+                    break
+            if target:
+                break
+        if target:
+            break
+    if target is None:
+        # Fallback to any meal with a container
+        for day in days_sorted:
+            for meal in day.meals:
+                if meal.container is not None:
+                    target = meal
+                    break
+            if target:
+                break
+
+    if target is None or target.container is None:
+        return None
+
+    target.container.contents_description = title
+    target.container.heating_instructions = (
+        "Твой рецепт из ленты «Поднос» — приготовь по своему усмотрению"
+    )
+    return future_plan.id
+
+
 @router.post("/posts/{post_id}/plan-request")
 async def toggle_plan_request(
     post_id: int,
@@ -262,8 +349,15 @@ async def toggle_plan_request(
 ):
     """Toggle whether a recipe post is queued for the next generated meal plan.
 
+    Behaviour:
+    - Always toggles the queue entry (PlanRecipeRequest row).
+    - If the user already has a generated plan for a future period, inserts
+      the recipe into it immediately (so it shows up without a regeneration).
+    - Otherwise the recipe stays queued and is applied during the next
+      `POST /plan/generate` for a future week.
+
     Only posts with category='recipe' can be queued.
-    Returns {"queued": bool, "title": str}.
+    Returns {"queued": bool, "title": str, "applied_to_plan_id": int | None}.
     """
     post = (
         await db.execute(
@@ -275,24 +369,54 @@ async def toggle_plan_request(
     if post.category != "recipe":
         raise HTTPException(status_code=400, detail="Only recipe posts can be added to a plan")
 
+    today = date.today()
     existing = (
         await db.execute(
             select(PlanRecipeRequest)
+            .outerjoin(MealPlan, MealPlan.id == PlanRecipeRequest.used_in_plan_id)
             .where(PlanRecipeRequest.post_id == post_id)
             .where(PlanRecipeRequest.user_id == user_id)
-            .where(PlanRecipeRequest.used_in_plan_id.is_(None))
+            .where(
+                or_(
+                    PlanRecipeRequest.used_in_plan_id.is_(None),
+                    and_(MealPlan.status == "active", MealPlan.period_end >= today),
+                )
+            )
         )
     ).scalar_one_or_none()
 
+    applied_plan_id: int | None = None
+
     if existing:
+        # UNTOGGLE — drop the queue entry. If the recipe was already injected
+        # into a future plan, we leave the meal slot alone (user can replace
+        # it via the plan UI).
         await db.delete(existing)
         queued = False
+        await db.commit()
     else:
-        db.add(PlanRecipeRequest(user_id=user_id, post_id=post_id, title=post.title.strip()))
-        queued = True
+        # TOGGLE ON. Clear stale historical entries first to avoid the
+        # (user_id, post_id) unique-constraint clash for re-queueing later.
+        await db.execute(
+            delete(PlanRecipeRequest)
+            .where(PlanRecipeRequest.user_id == user_id)
+            .where(PlanRecipeRequest.post_id == post_id)
+        )
+        title = post.title.strip()
+        # Try to inject into an already-generated future plan first
+        applied_plan_id = await _insert_into_existing_future_plan(db, user_id, title)
 
-    await db.commit()
-    return {"queued": queued, "title": post.title}
+        request = PlanRecipeRequest(
+            user_id=user_id,
+            post_id=post_id,
+            title=title,
+            used_in_plan_id=applied_plan_id,  # set when eagerly inserted
+        )
+        db.add(request)
+        queued = True
+        await db.commit()
+
+    return {"queued": queued, "title": post.title, "applied_to_plan_id": applied_plan_id}
 
 
 # ----- Comments -----

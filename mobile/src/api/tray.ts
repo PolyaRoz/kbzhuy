@@ -57,7 +57,9 @@ export const trayApi = {
 
   togglePlanRequest: (postId: number) =>
     apiClient
-      .post<{ queued: boolean; title: string }>(`/tray/posts/${postId}/plan-request`)
+      .post<{ queued: boolean; title: string; applied_to_plan_id: number | null }>(
+        `/tray/posts/${postId}/plan-request`,
+      )
       .then((r) => r.data),
 
   listComments: (postId: number) =>
